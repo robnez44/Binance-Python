@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import List, Optional, Tuple
 from models.metrics import SegmentMetrics
-from utils.utils import timestamp_to_utc, toDicto
+from utils.utils import ask_candles_params, timestamp_to_utc, toDicto
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -244,17 +244,8 @@ if __name__ == "__main__":
     # ── Descarga de datos ─────────────────────────────────────────────────
     url = "https://api.binance.com/api/v3/"
 
-    start_date = datetime(2026, 2, 1, 4, tzinfo=timezone.utc)   # 2026/02/04 04:00 UTC
-    start_time = int(start_date.timestamp() * 1000)
-    end_date = datetime(2026, 2, 12, tzinfo=timezone.utc)       # 2026/02/12 00:00 UTC
-    end_time = int(end_date.timestamp() * 1000)
+    params = ask_candles_params()
 
-    params = {
-        "symbol": "BTCUSDT",
-        "interval": "4h",
-        "startTime": start_time,
-        #"endTime": end_time,
-    }
     response = requests.get(url + "klines", params=params)
     data = response.json()
 
@@ -289,8 +280,8 @@ if __name__ == "__main__":
     print("─" * 110)
 
     for i, seg in enumerate(trends, 1):
-        t0 = times[seg.start_idx].strftime("%m/%d %H:%M")
-        t1 = times[seg.end_idx].strftime("%m/%d %H:%M")
+        t0 = times[seg.start_idx].strftime("%Y/%m/%d %H:%M")
+        t1 = times[seg.end_idx].strftime("%Y/%m/%d %H:%M")
         print(f"{i:>2}  {seg.regime:<6}  {seg.start_idx:>6} → {seg.end_idx:>6}  "
               f"{seg.length:>4}  {seg.a:>+12.4f}  {seg.pct_slope:>+10.4f}%  "
               f"{seg.r2:>8.4f}  {t0} → {t1}")
