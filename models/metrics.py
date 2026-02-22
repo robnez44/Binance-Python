@@ -13,3 +13,7 @@ class SegmentMetrics:
     pct_slope: float    # pendiente porcentual: 100 * a / mean(y)
     mean_price: float   # precio medio del segmento
     regime: str         # 'UP' / 'DOWN' / 'SIDE'
+    start_time: str     # fecha/hora inicio (UTC)
+    end_time: str       # fecha/hora fin (UTC)
+    start_price: float  # precio de cierre de la primera vela
+    end_price: float    # precio de cierre de la última vela

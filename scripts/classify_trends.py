@@ -46,6 +46,7 @@ def classify_trend(
 
 def find_all_trends(
     prices: np.ndarray,
+    times: np.ndarray,
     window: int = 10,
     min_win: int = 5,
     r2_min: float = 0.50,
@@ -108,6 +109,10 @@ def find_all_trends(
                     length=length, a=a, b=b, r2=r2,
                     pct_slope=pct_slope, mean_price=mean_y,
                     regime=regime,
+                    start_time=str(times[start]),
+                    end_time=str(times[end_i]),
+                    start_price=float(prices[start]),
+                    end_price=float(prices[end_i]),
                 )
 
         if best_seg is not None:
@@ -123,6 +128,10 @@ def find_all_trends(
                 length=min_win, a=a, b=b, r2=r2,
                 pct_slope=pct_slope, mean_price=mean_y,
                 regime="SIDE",
+                start_time=str(times[start]),
+                end_time=str(times[side_end]),
+                start_price=float(prices[start]),
+                end_price=float(prices[side_end]),
             ))
             # Avanzar solo 1 vela para no ocultar tendencias cercanas
             start += 1
@@ -159,6 +168,10 @@ def find_all_trends(
                             a=a, b=b, r2=r2,
                             pct_slope=pct_slope, mean_price=mean_y,
                             regime="SIDE",
+                            start_time=str(times[prev.start_idx]),
+                            end_time=str(times[new_side_end]),
+                            start_price=float(prices[prev.start_idx]),
+                            end_price=float(prices[new_side_end]),
                         )
 
         # Fusionar SIDEs consecutivos
@@ -175,6 +188,10 @@ def find_all_trends(
                 a=a, b=b, r2=r2,
                 pct_slope=pct_slope, mean_price=mean_y,
                 regime="SIDE",
+                start_time=str(times[prev.start_idx]),
+                end_time=str(times[new_end]),
+                start_price=float(prices[prev.start_idx]),
+                end_price=float(prices[new_end]),
             )
         else:
             consolidated.append(seg)
@@ -194,6 +211,10 @@ def find_all_trends(
                 a=a, b=b, r2=r2,
                 pct_slope=pct_slope, mean_price=mean_y,
                 regime="SIDE",
+                start_time=str(times[tail_start]),
+                end_time=str(times[n - 1]),
+                start_price=float(prices[tail_start]),
+                end_price=float(prices[n - 1]),
             )
             # Fusionar con último si también es SIDE
             if consolidated[-1].regime == "SIDE":
@@ -206,6 +227,10 @@ def find_all_trends(
                     a=a, b=b, r2=r2,
                     pct_slope=pct_slope, mean_price=mean_y,
                     regime="SIDE",
+                    start_time=str(times[prev.start_idx]),
+                    end_time=str(times[n - 1]),
+                    start_price=float(prices[prev.start_idx]),
+                    end_price=float(prices[n - 1]),
                 )
             else:
                 consolidated.append(tail_seg)
@@ -228,6 +253,10 @@ def find_all_trends(
                 a=a, b=b, r2=r2,
                 pct_slope=pct_slope, mean_price=mean_y,
                 regime=regime,
+                start_time=str(times[prev.start_idx]),
+                end_time=str(times[new_end]),
+                start_price=float(prices[prev.start_idx]),
+                end_price=float(prices[new_end]),
             )
         else:
             final.append(seg)
@@ -271,19 +300,21 @@ if __name__ == "__main__":
     times = pd.to_datetime(X, utc=True)
 
     # ── Detección de TODAS las tendencias ─────────────────────────────────
-    trends = find_all_trends(float_prices, WINDOW, MIN_WIN, MIN_R2, PCT_SLOPE_MIN)
+    trends = find_all_trends(float_prices, times, WINDOW, MIN_WIN, MIN_R2, PCT_SLOPE_MIN)
 
     print(f"\nTotal de velas: {len(float_prices)}")
     print(f"Tendencias detectadas: {len(trends)}\n")
     print(f"{'#':>2}  {'Régimen':<6}  {'Inicio':>6} → {'Fin':>6}  {'Length':>4}  "
+          f"{'P.Inicio':>10}  {'P.Final':>10}  "
           f"{'a':>12}  {'pct_slope':>10}  {'R²':>8}  {'Rango temporal'}")
-    print("─" * 110)
+    print("─" * 130)
 
     for i, seg in enumerate(trends, 1):
-        t0 = times[seg.start_idx].strftime("%Y/%m/%d %H:%M")
-        t1 = times[seg.end_idx].strftime("%Y/%m/%d %H:%M")
+        t0 = pd.Timestamp(seg.start_time).strftime("%Y/%m/%d %H:%M")
+        t1 = pd.Timestamp(seg.end_time).strftime("%Y/%m/%d %H:%M")
         print(f"{i:>2}  {seg.regime:<6}  {seg.start_idx:>6} → {seg.end_idx:>6}  "
-              f"{seg.length:>4}  {seg.a:>+12.4f}  {seg.pct_slope:>+10.4f}%  "
+              f"{seg.length:>4}  {seg.start_price:>10.2f}  {seg.end_price:>10.2f}  "
+              f"{seg.a:>+12.4f}  {seg.pct_slope:>+10.4f}%  "
               f"{seg.r2:>8.4f}  {t0} → {t1}")
 
     # ── Gráfico ───────────────────────────────────────────────────────────
