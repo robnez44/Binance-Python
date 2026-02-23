@@ -1,12 +1,9 @@
 import matplotlib.pyplot as plt
 from datetime import datetime, timezone
+from services.binance import get_klines
 from utils.utils import timestamp_to_utc, toDicto
 import pytz
-import requests
 import json
-
-# URL de la API
-url = "https://api.binance.com/api/v3/"
 
 # Convertir fecha a milisegundos (Fecha UTC)                # YYYY/MM/DD - HH:MM:SS
 start_date = datetime(2026, 2, 4, 4, tzinfo=timezone.utc)   # 2O26/02/04 - 04:00:00
@@ -21,8 +18,9 @@ params = {
     "startTime": start_time,
     "endTime": end_time,
 }
-response = requests.get(url+"klines", params=params)
-data = response.json()
+
+# Descarga de precios
+data = get_klines(params)
 # print(json.dumps(data[-1], indent=3)) # Ver la ultima  vela
 
 # Verificar la fecha de la primera vela
@@ -38,7 +36,7 @@ y = [k["close_price"] for k in cleaned_data]
 
 # Representar precios con grafico de lineas
 fig, ax = plt.subplots(figsize=(10, 6))
-ax.plot(x, y)
+ax.plot(x, y, marker="o", ms=2.5, color="steelblue", linewidth=1.2)
 ax.set_xlabel("Fecha de cierre")
 ax.set_ylabel("Precio de cierre")
 ax.set_title("Bitcoin / TetherUS • 4h • Binance")

@@ -1,11 +1,11 @@
 from datetime import datetime, timezone
 from typing import List, Optional, Tuple
 from models.metrics import SegmentMetrics
+from services.binance import get_klines
 from utils.utils import ask_candles_params, timestamp_to_utc, toDicto
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import requests
 import json
 
 # ──────────────────────────────────────────────────────────────────────────── #
@@ -271,12 +271,8 @@ def find_all_trends(
 if __name__ == "__main__":
 
     # ── Descarga de datos ─────────────────────────────────────────────────
-    url = "https://api.binance.com/api/v3/"
-
     params = ask_candles_params()
-
-    response = requests.get(url + "klines", params=params)
-    data = response.json()
+    data = get_klines(params)
 
     timestamp_ms = data[0][0]
     date_utc = timestamp_to_utc(timestamp_ms)
