@@ -28,7 +28,10 @@ Binance-Python/
 │   └── metrics.py            # Dataclass SegmentMetrics
 ├── scripts/
 │   ├── classify_trends.py    # Detección y gráfico de tendencias
+│   ├── ema_analysis.py       # Cálculo y gráfico de EMAs con pendiente
 │   └── prices.py             # Descarga y visualización de precios desde Binance
+├── services/
+│   └── binance.py            # Cliente de la API de Binance
 ├── utils/
 │   └── utils.py              # Funciones auxiliares
 ├── pyproject.toml
@@ -40,13 +43,18 @@ Binance-Python/
 
 ```bash
 # Ejecutar el detector de tendencias
-python scripts/classify_trends.py
+python -m scripts.classify_trends
 
 # Ejecutar descarga de precios
-python scripts/prices.py
+python -m scripts.prices
+
+# Ejecutar análisis de EMAs
+python -m scripts.ema_analysis
 ```
 
 ### Salida esperada
+
+#### classify_trends.py
 
 Una tabla con las tendencias detectadas:
 
@@ -62,3 +70,18 @@ Y un gráfico con:
 - Serie completa de precios
 - Zonas sombreadas (verde = UP, rojo = DOWN, gris = SIDE)
 - Recta de regresión sobre cada segmento
+
+#### ema_analysis.py
+
+Información de las EMAs:
+
+```
+Total de velas: 48
+  EMA  10:  Ultimo valor =     96542.30   Pendiente = +0.1523 %   Δ slope = +146.92 USDT
+  EMA  50:  Ultimo valor =     97010.85   Pendiente = +0.0312 %   Δ slope = +30.27 USDT
+  EMA 200:  Ultimo valor =     97250.40   Pendiente = +0.0078 %   Δ slope = +7.58 USDT
+```
+
+Y un gráfico con dos subplots:
+- **Superior**: precio de cierre + EMAs superpuestas
+- **Inferior**: pendiente de cada EMA (cambio porcentual vela a vela)
