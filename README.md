@@ -28,6 +28,7 @@ Binance-Python/
 │   └── metrics.py            # Dataclass SegmentMetrics
 ├── scripts/
 │   ├── classify_trends.py    # Detección y gráfico de tendencias
+│   ├── dashboard.py           # Vista combinada: tendencias + EMAs + pendientes
 │   ├── ema_analysis.py       # Cálculo y gráfico de EMAs con pendiente
 │   └── prices.py             # Descarga y visualización de precios desde Binance
 ├── services/
@@ -50,6 +51,9 @@ python -m scripts.prices
 
 # Ejecutar análisis de EMAs
 python -m scripts.ema_analysis
+
+# Ejecutar dashboard combinado
+python -m scripts.dashboard
 ```
 
 ### Salida esperada
@@ -85,3 +89,13 @@ Total de velas: 48
 Y un gráfico con dos subplots:
 - **Superior**: precio de cierre + EMAs superpuestas
 - **Inferior**: pendiente de cada EMA (cambio porcentual vela a vela)
+
+#### dashboard.py
+
+Combina todo en una sola ejecución (descarga datos una vez). Muestra:
+- Tabla completa de tendencias
+- Información de EMAs con pendiente porcentual y absoluta
+- Gráfico con 3 subplots:
+  1. Precio + tendencias (zonas sombreadas + rectas de regresión)
+  2. Precio + EMAs (10, 50, 200)
+  3. Pendientes de las EMAs
