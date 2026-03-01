@@ -7,4 +7,4 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["models*", "scripts*", "utils*", "services*"]
+include = ["database*", "dashboard*", "scripts*", "utils*", "services*", "models*",]

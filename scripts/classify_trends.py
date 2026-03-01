@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from typing import List, Optional, Tuple
-from models.metrics import SegmentMetrics
+from database.schemas import SegmentMetrics
 from services.binance import get_klines
 from utils.utils import ask_candles_params, timestamp_to_utc, toDicto
 import matplotlib.pyplot as plt
@@ -47,6 +47,8 @@ def classify_trend(
 def find_all_trends(
     prices: np.ndarray,
     times: np.ndarray,
+    symbol: str,
+    interval: str,
     window: int = 10,
     min_win: int = 5,
     r2_min: float = 0.50,
@@ -105,6 +107,7 @@ def find_all_trends(
                 # Tendencia válida: preferir la MÁS LARGA (iteramos de corta
                 # a larga, así la última válida es la más larga).
                 best_seg = SegmentMetrics(
+                    symbol=symbol, interval=interval,
                     start_idx=start, end_idx=end_i,
                     length=length, a=a, b=b, r2=r2,
                     pct_slope=pct_slope, mean_price=mean_y,
@@ -124,6 +127,7 @@ def find_all_trends(
             y_side = prices[start : side_end + 1]
             a, b, r2, pct_slope, mean_y, _ = fit_model_metrics(y_side)
             segments.append(SegmentMetrics(
+                symbol=symbol, interval=interval,
                 start_idx=start, end_idx=side_end,
                 length=min_win, a=a, b=b, r2=r2,
                 pct_slope=pct_slope, mean_price=mean_y,
@@ -163,6 +167,7 @@ def find_all_trends(
                         y_s = prices[prev.start_idx : new_side_end + 1]
                         a, b, r2, pct_slope, mean_y, _ = fit_model_metrics(y_s)
                         consolidated[-1] = SegmentMetrics(
+                            symbol=symbol, interval=interval,
                             start_idx=prev.start_idx, end_idx=new_side_end,
                             length=new_side_end - prev.start_idx + 1,
                             a=a, b=b, r2=r2,
@@ -183,6 +188,7 @@ def find_all_trends(
             y_m = prices[prev.start_idx : new_end + 1]
             a, b, r2, pct_slope, mean_y, _ = fit_model_metrics(y_m)
             consolidated[-1] = SegmentMetrics(
+                symbol=symbol, interval=interval,
                 start_idx=prev.start_idx, end_idx=new_end,
                 length=new_end - prev.start_idx + 1,
                 a=a, b=b, r2=r2,
@@ -206,6 +212,7 @@ def find_all_trends(
             y_tail = prices[tail_start:]
             a, b, r2, pct_slope, mean_y, _ = fit_model_metrics(y_tail)
             tail_seg = SegmentMetrics(
+                symbol=symbol, interval=interval,
                 start_idx=tail_start, end_idx=n - 1,
                 length=n - tail_start,
                 a=a, b=b, r2=r2,
@@ -222,6 +229,7 @@ def find_all_trends(
                 y_m = prices[prev.start_idx : n]
                 a, b, r2, pct_slope, mean_y, _ = fit_model_metrics(y_m)
                 consolidated[-1] = SegmentMetrics(
+                    symbol=symbol, interval=interval,
                     start_idx=prev.start_idx, end_idx=n - 1,
                     length=n - prev.start_idx,
                     a=a, b=b, r2=r2,
@@ -248,6 +256,7 @@ def find_all_trends(
             a, b, r2, pct_slope, mean_y, _ = fit_model_metrics(y_m)
             regime = classify_trend(a, r2, r2_min, pct_slope, pct_slope_min)
             final[-1] = SegmentMetrics(
+                symbol=symbol, interval=interval,
                 start_idx=prev.start_idx, end_idx=new_end,
                 length=new_end - prev.start_idx + 1,
                 a=a, b=b, r2=r2,
@@ -296,7 +305,9 @@ if __name__ == "__main__":
     times = pd.to_datetime(X, utc=True)
 
     # ── Detección de TODAS las tendencias ─────────────────────────────────
-    trends = find_all_trends(float_prices, times, WINDOW, MIN_WIN, MIN_R2, PCT_SLOPE_MIN)
+    symbol = params["symbol"]
+    interval = params["interval"]
+    trends = find_all_trends(float_prices, times, symbol, interval, WINDOW, MIN_WIN, MIN_R2, PCT_SLOPE_MIN)
 
     print(f"\nTotal de velas: {len(float_prices)}")
     print(f"Tendencias detectadas: {len(trends)}\n")
