@@ -1,4 +1,5 @@
 from services.binance import get_klines
+from database.schemas import EMASnapshot
 from utils.utils import ask_candles_params, timestamp_to_utc, toDicto
 import matplotlib.pyplot as plt
 import numpy as np
@@ -40,6 +41,36 @@ def ema_slope(ema: np.ndarray) -> np.ndarray:
     return slope
 
 
+def build_ema_snapshots(
+    symbol: str,
+    interval: str,
+    span: int,
+    prices: np.ndarray,
+    ema_values: np.ndarray,
+    abs_slopes: np.ndarray,
+    pct_slopes: np.ndarray,
+    times: pd.DatetimeIndex,
+) -> list[EMASnapshot]:
+    """Construye una lista de EMASnapshot a partir de los arrays calculados."""
+    snapshots = []
+    for i in range(len(prices)):
+        distance = float(prices[i] - ema_values[i])
+        distance_pct = (distance / ema_values[i]) * 100 if ema_values[i] != 0 else 0.0
+        snapshots.append(EMASnapshot(
+            symbol=symbol,
+            interval=interval,
+            timestamp=times[i].to_pydatetime(),
+            span=span,
+            price=float(prices[i]),
+            ema_value=float(ema_values[i]),
+            abs_slope=float(abs_slopes[i]),
+            pct_slope=float(pct_slopes[i]),
+            distance=distance,
+            distance_pct=distance_pct,
+        ))
+    return snapshots
+
+
 # ──────────────────────────────────────────────────────────────────────────── #
 #  Main
 # ──────────────────────────────────────────────────────────────────────────── #
@@ -63,17 +94,24 @@ if __name__ == "__main__":
     prices = np.array([float(k["close_price"]) for k in cleaned_data], dtype=float)
 
     # ── Parametros EMA ────────────────────────────────────────────────────
-    EMA_SPANS = [10, 50, 200]           # agregar 200 cuando quieras
-    EMA_COLORS = {10: "pink", 50: "orange", 200: "red"}
+    symbol = params["symbol"]
+    interval = params["interval"]
+    EMA_SPANS = [10, 55, 200]
+    EMA_COLORS = {10: "pink", 55: "orange", 200: "red"}
 
     # ── Calculos ───────────────────────────────────────────────────────────
     emas = {}
     pct_slopes = {}
     slopes = {}
+    snapshots = {}  # span -> list[EMASnapshot]
     for span in EMA_SPANS:
         emas[span] = compute_ema(prices, span)
         pct_slopes[span] = ema_pct_slope(emas[span])
         slopes[span] = ema_slope(emas[span])
+        snapshots[span] = build_ema_snapshots(
+            symbol, interval, span, prices,
+            emas[span], slopes[span], pct_slopes[span], times,
+        )
 
 
     # ── Info por consola ──────────────────────────────────────────────────
