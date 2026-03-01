@@ -1,6 +1,6 @@
 from services.binance import get_klines
 from scripts.classify_trends import find_all_trends
-from scripts.ema_analysis import compute_ema, ema_pct_slope, ema_slope
+from scripts.ema_analysis import compute_ema, ema_pct_slope, ema_slope, build_ema_snapshots
 from utils.utils import ask_candles_params, timestamp_to_utc, toDicto
 import matplotlib.pyplot as plt
 import numpy as np
@@ -26,7 +26,9 @@ if __name__ == "__main__":
     MIN_R2 = 0.65
     PCT_SLOPE_MIN = 0.05
 
-    trends = find_all_trends(prices, times, WINDOW, MIN_WIN, MIN_R2, PCT_SLOPE_MIN)
+    symbol = params["symbol"]
+    interval = params["interval"]
+    trends = find_all_trends(prices, times, symbol, interval, WINDOW, MIN_WIN, MIN_R2, PCT_SLOPE_MIN)
 
     # ── EMAs ──────────────────────────────────────────────────────────────
     EMA_SPANS = [10, 50, 200]
@@ -35,10 +37,15 @@ if __name__ == "__main__":
     emas = {}
     pct_slopes = {}
     slopes = {}
+    snapshots = {}
     for span in EMA_SPANS:
         emas[span] = compute_ema(prices, span)
         pct_slopes[span] = ema_pct_slope(emas[span])
         slopes[span] = ema_slope(emas[span])
+        snapshots[span] = build_ema_snapshots(
+            symbol, interval, span, prices,
+            emas[span], slopes[span], pct_slopes[span], times,
+        )
 
     # ── Info por consola: Tendencias ───────────────────────────────────────
     print(f"\nTotal de velas: {len(prices)}")
