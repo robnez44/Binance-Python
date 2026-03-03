@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from database.schemas import ADXSnapshot
 
 def smoothing(series: pd.Series, n: int) -> pd.Series:
     return series.ewm(alpha=1/n, adjust=False).mean()
@@ -41,3 +42,24 @@ def compute_adx(high: pd.Series, low: pd.Series, close: pd.Series, n: int = 14) 
     adx = smoothing(dx, n)
 
     return pd.DataFrame({"+DI": plus_di, "-DI": minus_di, "DX": dx, "ADX": adx})
+
+def build_adx_snapshots(
+    symbol: str,
+    interval: str,
+    adx_df: pd.DataFrame,
+    times: pd.DatetimeIndex,
+) -> list[ADXSnapshot]:
+    """Construye una lista de ADXSnapshot a partir del DataFrame de compute_adx."""
+    snapshots = []
+    for i in range(len(adx_df)):
+        snapshots.append(ADXSnapshot(
+            symbol=symbol,
+            interval=interval,
+            timestamp=times[i].to_pydatetime(),
+            plus_di=float(adx_df["+DI"].iloc[i]) if not np.isnan(adx_df["+DI"].iloc[i]) else 0.0,
+            minus_di=float(adx_df["-DI"].iloc[i]) if not np.isnan(adx_df["-DI"].iloc[i]) else 0.0,
+            dx=float(adx_df["DX"].iloc[i]) if not np.isnan(adx_df["DX"].iloc[i]) else 0.0,
+            adx=float(adx_df["ADX"].iloc[i]) if not np.isnan(adx_df["ADX"].iloc[i]) else 0.0,
+        ))
+    return snapshots
+

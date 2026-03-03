@@ -1,15 +1,3 @@
-"""
-Funciones de persistencia en MongoDB (async).
-
-Tres colecciones con índices únicos para evitar duplicados:
-  - trends          → (symbol, interval, start_time, end_time)
-  - ema_snapshots   → (symbol, interval, timestamp, span)
-  - analysis        → (symbol, interval, start_time, end_time)
-
-Todas las escrituras usan upsert: si el documento ya existe se
-actualiza, si no existe se inserta.
-"""
-
 from dataclasses import asdict
 from datetime import datetime, timezone
 from typing import List, Dict
@@ -17,7 +5,9 @@ from typing import List, Dict
 from pymongo import UpdateOne
 
 from database.database import get_db
-from database.schemas import SegmentMetrics, EMASnapshot, AnalysisRecord
+from database.schemas import (
+    Candle, SegmentMetrics, EMASnapshot, ADXSnapshot, SMISnapshot, AnalysisRecord,
+)
 
 
 # ──────────────────────────────────────────────────────────────────────────── #
@@ -25,8 +15,14 @@ from database.schemas import SegmentMetrics, EMASnapshot, AnalysisRecord
 # ──────────────────────────────────────────────────────────────────────────── #
 
 async def ensure_indexes() -> None:
-    """Crea los índices únicos (idempotente: si ya existen, no pasa nada)."""
+    """Crea los índices únicos."""
     db = get_db()
+
+    await db.candles.create_index(
+        [("symbol", 1), ("interval", 1), ("open_time", 1)],
+        unique=True,
+        name="uq_candle",
+    )
 
     await db.trends.create_index(
         [("symbol", 1), ("interval", 1), ("start_time", 1), ("end_time", 1)],
@@ -40,6 +36,18 @@ async def ensure_indexes() -> None:
         name="uq_ema_snap",
     )
 
+    await db.adx_snapshots.create_index(
+        [("symbol", 1), ("interval", 1), ("timestamp", 1)],
+        unique=True,
+        name="uq_adx_snap",
+    )
+
+    await db.smi_snapshots.create_index(
+        [("symbol", 1), ("interval", 1), ("timestamp", 1)],
+        unique=True,
+        name="uq_smi_snap",
+    )
+
     await db.analysis.create_index(
         [("symbol", 1), ("interval", 1), ("start_time", 1), ("end_time", 1)],
         unique=True,
@@ -47,6 +55,33 @@ async def ensure_indexes() -> None:
     )
 
     print("Índices verificados / creados.")
+
+
+# ──────────────────────────────────────────────────────────────────────────── #
+#  Candles
+# ──────────────────────────────────────────────────────────────────────────── #
+
+async def save_candles(candles: List[Candle]) -> int:
+    """Guarda/actualiza candles. Retorna documentos afectados."""
+    if not candles:
+        return 0
+
+    db = get_db()
+    ops = []
+    for candle in candles:
+        doc = asdict(candle)
+        ops.append(UpdateOne(
+            {
+                "symbol": doc["symbol"],
+                "interval": doc["interval"],
+                "open_time": doc["open_time"],
+            },
+            {"$set": doc},
+            upsert=True,
+        ))
+
+    result = await db.candles.bulk_write(ops, ordered=False)
+    return result.upserted_count + result.modified_count
 
 
 # ──────────────────────────────────────────────────────────────────────────── #
@@ -106,7 +141,61 @@ async def save_ema_snapshots(snapshots: List[EMASnapshot]) -> int:
 
 
 # ──────────────────────────────────────────────────────────────────────────── #
-#  Analysis Record (documento completo con trends + EMAs embebidos)
+#  ADX Snapshots
+# ──────────────────────────────────────────────────────────────────────────── #
+
+async def save_adx_snapshots(snapshots: List[ADXSnapshot]) -> int:
+    """Guarda/actualiza snapshots ADX. Retorna documentos afectados."""
+    if not snapshots:
+        return 0
+
+    db = get_db()
+    ops = []
+    for snap in snapshots:
+        doc = asdict(snap)
+        ops.append(UpdateOne(
+            {
+                "symbol": doc["symbol"],
+                "interval": doc["interval"],
+                "timestamp": doc["timestamp"],
+            },
+            {"$set": doc},
+            upsert=True,
+        ))
+
+    result = await db.adx_snapshots.bulk_write(ops, ordered=False)
+    return result.upserted_count + result.modified_count
+
+
+# ──────────────────────────────────────────────────────────────────────────── #
+#  SMI Snapshots
+# ──────────────────────────────────────────────────────────────────────────── #
+
+async def save_smi_snapshots(snapshots: List[SMISnapshot]) -> int:
+    """Guarda/actualiza snapshots SMI. Retorna documentos afectados."""
+    if not snapshots:
+        return 0
+
+    db = get_db()
+    ops = []
+    for snap in snapshots:
+        doc = asdict(snap)
+        ops.append(UpdateOne(
+            {
+                "symbol": doc["symbol"],
+                "interval": doc["interval"],
+                "timestamp": doc["timestamp"],
+            },
+            {"$set": doc},
+            upsert=True,
+        ))
+
+    result = await db.smi_snapshots.bulk_write(ops, ordered=False)
+    return result.upserted_count + result.modified_count
+
+
+# ──────────────────────────────────────────────────────────────────────────── #
+#  Analysis Record (documento completo con trends + EMAs + ADX + SMI embebidos)
 # ──────────────────────────────────────────────────────────────────────────── #
 
 async def save_analysis(record: AnalysisRecord) -> str:

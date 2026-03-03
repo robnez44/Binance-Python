@@ -2,6 +2,22 @@ from typing import List, Dict
 from dataclasses import dataclass, field
 from datetime import datetime
 
+@dataclass
+class Candle:
+    """Representa una vela de precio."""
+    symbol: str             # "BTCUSDT"
+    interval: str           # "4h", "1d"
+    open_time: datetime
+    open_price: float
+    high_price: float
+    low_price: float
+    close_price: float
+    volume: float
+    close_time: datetime
+    quote_asset_volume: float
+    number_of_trades: int
+    taker_buy_base_asset_volume: float
+    taker_buy_quote_asset_volume: float
 
 @dataclass
 class SegmentMetrics:
@@ -39,6 +55,29 @@ class EMASnapshot:
     distance_pct: float     # ((precio - ema_value) / ema_value) * 100
 
 @dataclass
+class ADXSnapshot:
+    """
+    Un punto del ADX en una vela específica.
+    """
+    symbol: str             # "BTCUSDT"
+    interval: str           # "4h", "1d"
+    timestamp: datetime     # fecha/hora de la vela
+    plus_di: float          # +DI
+    minus_di: float         # -DI
+    dx: float               # DX
+    adx: float              # ADX
+
+@dataclass
+class SMISnapshot:
+    """
+    Un punto del Squeeze Momentum Indicator en una vela específica.
+    """
+    symbol: str             # "BTCUSDT"
+    interval: str           # "4h", "1d"
+    timestamp: datetime     # fecha/hora de la vela
+    smi: float              # valor del SMI
+
+@dataclass
 class AnalysisRecord:
     """
     Un documento en MongoDB.
@@ -59,4 +98,6 @@ class AnalysisRecord:
     #   "55":  [EMASnapshot, EMASnapshot, ...],
     #   "200": [EMASnapshot, EMASnapshot, ...],
     # }
+    adx_points: List[ADXSnapshot] = field(default_factory=list)             # puntos ADX
+    smi_points: List[SMISnapshot] = field(default_factory=list)             # puntos SMI
     created_at: datetime = None

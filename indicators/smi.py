@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from indicators.adx import true_range
+from database.schemas import SMISnapshot
 
 def compute_squeeze(
     high: pd.Series, low: pd.Series, close: pd.Series, bb_len: int = 20, bb_mult: float = 2.0, kc_len: int = 20, kc_mult: float = 1.5, mom_len: int = 20
@@ -49,3 +50,21 @@ def compute_squeeze(
         "squeeze_off": squeeze_off.astype(int),
         "mom": mom_norm
     })
+
+def build_smi_snapshots(
+    symbol: str,
+    interval: str,
+    sqz_df: pd.DataFrame,
+    times: pd.DatetimeIndex,
+) -> list[SMISnapshot]:
+    """Construye una lista de SMISnapshot a partir del DataFrame de compute_squeeze."""
+    snapshots = []
+    for i in range(len(sqz_df)):
+        mom_val = float(sqz_df["mom"].iloc[i])
+        snapshots.append(SMISnapshot(
+            symbol=symbol,
+            interval=interval,
+            timestamp=times[i].to_pydatetime(),
+            smi=mom_val if not np.isnan(mom_val) else 0.0,
+        ))
+    return snapshots
