@@ -16,7 +16,7 @@ import pandas as pd
 
 from services.binance import get_klines
 from scripts.classify_trends import find_all_trends
-from scripts.ema_analysis import (compute_ema, ema_pct_slope, ema_slope, build_ema_snapshots,)
+from indicators.emas import (compute_ema, ema_pct_slope, ema_slope, build_ema_snapshots,)
 from utils.utils import ask_candles_params, toDicto
 from database.database import connectDB, disconnect
 from database.repository import ensure_indexes, save_trends, save_ema_snapshots, save_analysis

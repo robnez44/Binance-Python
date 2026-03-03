@@ -1,5 +1,5 @@
 [project]
-name = "binance-python"
+name = "crypto_analysis"
 version = "0.1.0"
 
 [build-system]
@@ -7,4 +7,4 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["database*", "dashboard*", "scripts*", "utils*", "services*", "models*",]
+include = ["database*", "dashboard*", "scripts*", "utils*", "services*", "indicators*",]

@@ -1,6 +1,6 @@
 from services.binance import get_klines
 from scripts.classify_trends import find_all_trends
-from scripts.ema_analysis import compute_ema, ema_pct_slope, ema_slope, build_ema_snapshots
+from indicators.emas import compute_ema, ema_pct_slope, ema_slope, build_ema_snapshots
 from utils.utils import ask_candles_params, timestamp_to_utc, toDicto
 import matplotlib.pyplot as plt
 import numpy as np
