@@ -11,7 +11,7 @@ def compute_squeeze(
 
     # calcular Bollinger Bands
     basis = close.rolling(bb_len).mean()
-    dev = bb_mult * close.rolling(bb_len).std(ddof=0)
+    dev = close.rolling(bb_len).std(ddof=0)
     upper_bb = basis + bb_mult * dev
     lower_bb = basis - bb_mult * dev
 
@@ -25,30 +25,36 @@ def compute_squeeze(
     squeeze_on = (upper_bb < upper_kc) & (lower_bb > lower_kc)
     squeeze_off = (upper_bb > upper_kc) | (lower_bb < lower_kc)
 
-    # momentum
-    def rolling_linreg_slope(series: pd.Series, window: int) -> pd.Series:
+    # momentum (LazyBear / TradingView)
+    # delta = close - avg(avg(highest(high, kc_len), lowest(low, kc_len)), sma(close, bb_len))
+    # mom   = linreg(delta, kc_len, 0)  →  valor de la recta en el punto actual
+    hl_mid = (high.rolling(kc_len).max() + low.rolling(kc_len).min()) / 2.0
+    delta  = close - (hl_mid + basis) / 2.0
+
+    def rolling_linreg_value(series: pd.Series, window: int) -> pd.Series:
+        """linreg(series, window, 0) — valor de la recta de regresión en el último punto."""
         x = np.arange(window, dtype=float)
         x_mean = x.mean()
-        denom = ((x - x_mean)**2).sum()
+        denom = ((x - x_mean) ** 2).sum()
         if denom == 0:
             return pd.Series(index=series.index, dtype=float)
-        
-        def _slope_w(y: np.ndarray) -> float:
+
+        def _val(y: np.ndarray) -> float:
             y_mean = y.mean()
-            num = ((x - x_mean) * (y - y_mean)).sum()
-            return float(num / denom)
+            a = ((x - x_mean) * (y - y_mean)).sum() / denom
+            b = y_mean - a * x_mean
+            return float(a * (window - 1) + b)
 
-        return series.rolling(window).apply(lambda arr: _slope_w(np.asarray(arr)), raw=True)
+        return series.rolling(window).apply(lambda arr: _val(np.asarray(arr)), raw=True)
 
-    mom_slope = rolling_linreg_slope(close, mom_len)
-    mom_norm = mom_slope / (close.rolling(mom_len).std(ddof=0) + 1e-12)
+    mom = rolling_linreg_value(delta, mom_len)
 
     return pd.DataFrame({
         "BB_basis": basis, "BB_up": upper_bb, "BB_dn": lower_bb,
         "KC_mid": kc_mid, "KC_up": upper_kc, "KC_dn": lower_kc,
         "squeeze_on": squeeze_on.astype(int),
         "squeeze_off": squeeze_off.astype(int),
-        "mom": mom_norm
+        "mom": mom
     })
 
 def build_smi_snapshots(
