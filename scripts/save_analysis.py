@@ -132,6 +132,7 @@ async def main():
         start_price=float(prices[0]),
         end_price=float(prices[-1]),
         total_candles=len(prices),
+        candles=candles,
         trends=trends,
         ema_points=snapshots_by_span,
         adx_points=adx_snaps,

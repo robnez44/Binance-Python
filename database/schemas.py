@@ -92,6 +92,7 @@ class AnalysisRecord:
     end_price: float                                                        # precio de cierre de la última vela del rango
     total_candles: int                                                      # cuántas velas tiene el rango
     trends: List[SegmentMetrics]                                            # tendencias detectadas
+    candles: List[Candle] = field(default_factory=list)                     # velas del rango
     ema_points: Dict[str, List[EMASnapshot]] = field(default_factory=dict)  # EMAs agrupadas por span
     # ema_points = {
     #   "10":  [EMASnapshot, EMASnapshot, ...],
