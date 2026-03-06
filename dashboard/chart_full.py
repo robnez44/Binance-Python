@@ -2,6 +2,7 @@ from services.binance import get_klines
 from indicators.emas import compute_ema, ema_pct_slope, ema_slope
 from indicators.adx import compute_adx
 from indicators.smi import compute_squeeze
+from indicators.levels import find_support_resistance
 from scripts.classify_trends import find_all_trends
 from utils.utils import ask_candles_params, timestamp_to_utc, toDicto
 import matplotlib.pyplot as plt
@@ -25,6 +26,7 @@ if __name__ == "__main__":
 
     times = pd.to_datetime([k["close_time"] for k in cleaned_data], utc=True)
     prices = np.array([float(k["close_price"]) for k in cleaned_data], dtype=float)
+    opens = np.array([float(k["open_price"]) for k in cleaned_data], dtype=float)
     highs = np.array([float(k["high_price"]) for k in cleaned_data], dtype=float)
     lows = np.array([float(k["low_price"]) for k in cleaned_data], dtype=float)
 
@@ -63,6 +65,12 @@ if __name__ == "__main__":
         WINDOW, MIN_WIN, MIN_R2, PCT_SLOPE_MIN,
     )
 
+    # ── Soportes y Resistencias ───────────────────────────────────────────
+    sr_levels = find_support_resistance(
+        high_s, low_s, close_s, times, symbol, interval,
+        atr_n=14, tol_mult=0.75, touch_tol_mult=0.3, min_touches=1,
+    )
+
     # ── Info por consola ──────────────────────────────────────────────────
     print(f"\nTotal de velas: {len(prices)}")
     for span in EMA_SPANS:
@@ -81,6 +89,12 @@ if __name__ == "__main__":
         print(f"    #{i:>2} {t.regime:>4}  velas {t.start_idx}–{t.end_idx}  "
               f"R²={t.r2:.2f}  pct_slope={t.pct_slope:+.4f}%")
 
+    print(f"\n  Soportes y resistencias: {len(sr_levels)}")
+    for lvl in sr_levels:
+        print(f"    {lvl.level_type:>10}  idx={lvl.idx:>4}  precio={lvl.price:>12.2f}  "
+              f"toques={lvl.touches}  "
+              f"{pd.Timestamp(lvl.timestamp).strftime('%Y-%m-%d %H:%M')}")
+
     # ══════════════════════════════════════════════════════════════════════
     #  Gráfico con 4 subplots
     # ══════════════════════════════════════════════════════════════════════
@@ -96,21 +110,58 @@ if __name__ == "__main__":
     ax_trend = fig.add_subplot(gs[2], sharex=ax_price)
     ax_sqz = fig.add_subplot(gs[3], sharex=ax_price)
 
-    # ── 1) Precio + EMAs ─────────────────────────────────────────────────
-    ax_price.plot(
-        times, prices,
-        marker="o", ms=2, color="steelblue", linewidth=1,
-        label="Precio cierre", zorder=2,
-    )
+    # ── 1) Velas japonesas + EMAs + Soportes/Resistencias ──────────────────
+    # Ancho de vela ≈ 70% del intervalo
+    if len(times) > 1:
+        candle_width = (times[1] - times[0]) * 0.7
+        wick_width = candle_width * 0.15
+    else:
+        candle_width = pd.Timedelta(hours=1)
+        wick_width = pd.Timedelta(minutes=10)
+
+    bull = prices >= opens  # velas alcistas
+    bear = ~bull
+
+    # Cuerpos
+    ax_price.bar(times[bull], (prices[bull] - opens[bull]), bottom=opens[bull],
+                 width=candle_width, color="#26a69a", edgecolor="#26a69a", zorder=3)
+    ax_price.bar(times[bear], (prices[bear] - opens[bear]), bottom=opens[bear],
+                 width=candle_width, color="#ef5350", edgecolor="#ef5350", zorder=3)
+
+    # Mechas
+    ax_price.vlines(times[bull], lows[bull], highs[bull],
+                    color="#26a69a", linewidth=0.8, zorder=2)
+    ax_price.vlines(times[bear], lows[bear], highs[bear],
+                    color="#ef5350", linewidth=0.8, zorder=2)
+
+    # EMAs
     for span in EMA_SPANS:
         ax_price.plot(
             times, emas[span],
             linewidth=1.5, color=EMA_COLORS[span],
-            label=f"EMA {span}", zorder=3,
+            label=f"EMA {span}", zorder=4,
         )
+
+    # Soportes y Resistencias
+    for lvl in sr_levels:
+        color = "#2196F3" if lvl.level_type == "support" else "#FF9800"
+        ax_price.hlines(lvl.price, xmin=times[0], xmax=times[-1],
+                        colors=color, linestyles="--", linewidth=0.7,
+                        alpha=0.7, zorder=5)
+
+    # Leyenda manual para S/R
+    from matplotlib.lines import Line2D as Line2D_sr
+    sr_legend = [
+        Line2D_sr([0], [0], color="#2196F3", linestyle="--", linewidth=1.0, label="Soporte"),
+        Line2D_sr([0], [0], color="#FF9800", linestyle="--", linewidth=1.0, label="Resistencia"),
+    ]
+    ema_handles = [
+        Line2D_sr([0], [0], color=EMA_COLORS[s], linewidth=1.5, label=f"EMA {s}")
+        for s in EMA_SPANS
+    ]
+    ax_price.legend(handles=ema_handles + sr_legend, loc="best", fontsize=8)
     ax_price.set_ylabel("Precio (USDT)")
-    ax_price.set_title(f"{symbol} • {interval} • Precio + EMAs + ADX + Squeeze")
-    ax_price.legend(loc="best", fontsize=8)
+    ax_price.set_title(f"{symbol} • {interval} • Precio + EMAs + S/R + Tendencias + Squeeze")
     ax_price.grid(True, alpha=0.2)
 
     # ── 2) Pendientes de las EMAs ─────────────────────────────────────────

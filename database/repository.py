@@ -6,14 +6,10 @@ from pymongo import UpdateOne
 
 from database.database import get_db
 from database.schemas import (
-    Candle, SegmentMetrics, EMASnapshot, ADXSnapshot, SMISnapshot, AnalysisRecord,
+    Candle, SegmentMetrics, EMASnapshot, ADXSnapshot, SMISnapshot, SRLevel, AnalysisRecord,
 )
 
-
-# ──────────────────────────────────────────────────────────────────────────── #
 #  Índices únicos
-# ──────────────────────────────────────────────────────────────────────────── #
-
 async def ensure_indexes() -> None:
     """Crea los índices únicos."""
     db = get_db()
@@ -48,6 +44,12 @@ async def ensure_indexes() -> None:
         name="uq_smi_snap",
     )
 
+    await db.sr_levels.create_index(
+        [("symbol", 1), ("interval", 1), ("timestamp", 1), ("level_type", 1)],
+        unique=True,
+        name="uq_sr_level",
+    )
+
     await db.analysis.create_index(
         [("symbol", 1), ("interval", 1), ("start_time", 1), ("end_time", 1)],
         unique=True,
@@ -56,11 +58,7 @@ async def ensure_indexes() -> None:
 
     print("Índices verificados / creados.")
 
-
-# ──────────────────────────────────────────────────────────────────────────── #
 #  Candles
-# ──────────────────────────────────────────────────────────────────────────── #
-
 async def save_candles(candles: List[Candle]) -> int:
     """Guarda/actualiza candles. Retorna documentos afectados."""
     if not candles:
@@ -84,10 +82,7 @@ async def save_candles(candles: List[Candle]) -> int:
     return result.upserted_count + result.modified_count
 
 
-# ──────────────────────────────────────────────────────────────────────────── #
 #  Trends
-# ──────────────────────────────────────────────────────────────────────────── #
-
 async def save_trends(trends: List[SegmentMetrics]) -> int:
     """Guarda/actualiza tendencias. Retorna documentos afectados."""
     if not trends:
@@ -111,11 +106,7 @@ async def save_trends(trends: List[SegmentMetrics]) -> int:
     result = await db.trends.bulk_write(ops, ordered=False)
     return result.upserted_count + result.modified_count
 
-
-# ──────────────────────────────────────────────────────────────────────────── #
 #  EMA Snapshots
-# ──────────────────────────────────────────────────────────────────────────── #
-
 async def save_ema_snapshots(snapshots: List[EMASnapshot]) -> int:
     """Guarda/actualiza snapshots EMA. Retorna documentos afectados."""
     if not snapshots:
@@ -139,11 +130,7 @@ async def save_ema_snapshots(snapshots: List[EMASnapshot]) -> int:
     result = await db.ema_snapshots.bulk_write(ops, ordered=False)
     return result.upserted_count + result.modified_count
 
-
-# ──────────────────────────────────────────────────────────────────────────── #
 #  ADX Snapshots
-# ──────────────────────────────────────────────────────────────────────────── #
-
 async def save_adx_snapshots(snapshots: List[ADXSnapshot]) -> int:
     """Guarda/actualiza snapshots ADX. Retorna documentos afectados."""
     if not snapshots:
@@ -166,11 +153,7 @@ async def save_adx_snapshots(snapshots: List[ADXSnapshot]) -> int:
     result = await db.adx_snapshots.bulk_write(ops, ordered=False)
     return result.upserted_count + result.modified_count
 
-
-# ──────────────────────────────────────────────────────────────────────────── #
 #  SMI Snapshots
-# ──────────────────────────────────────────────────────────────────────────── #
-
 async def save_smi_snapshots(snapshots: List[SMISnapshot]) -> int:
     """Guarda/actualiza snapshots SMI. Retorna documentos afectados."""
     if not snapshots:
@@ -193,11 +176,31 @@ async def save_smi_snapshots(snapshots: List[SMISnapshot]) -> int:
     result = await db.smi_snapshots.bulk_write(ops, ordered=False)
     return result.upserted_count + result.modified_count
 
+#  S/R Levels
+async def save_sr_levels(levels: List[SRLevel]) -> int:
+    """Guarda/actualiza niveles S/R. Retorna documentos afectados."""
+    if not levels:
+        return 0
 
-# ──────────────────────────────────────────────────────────────────────────── #
-#  Analysis Record (documento completo con trends + EMAs + ADX + SMI embebidos)
-# ──────────────────────────────────────────────────────────────────────────── #
+    db = get_db()
+    ops = []
+    for lvl in levels:
+        doc = asdict(lvl)
+        ops.append(UpdateOne(
+            {
+                "symbol": doc["symbol"],
+                "interval": doc["interval"],
+                "timestamp": doc["timestamp"],
+                "level_type": doc["level_type"],
+            },
+            {"$set": doc},
+            upsert=True,
+        ))
 
+    result = await db.sr_levels.bulk_write(ops, ordered=False)
+    return result.upserted_count + result.modified_count
+
+#  Analysis Record (completo con trends + EMAs + ADX + SMI + S/R embebidos)
 async def save_analysis(record: AnalysisRecord) -> str:
     """Guarda/actualiza el AnalysisRecord completo. Retorna el _id."""
     db = get_db()

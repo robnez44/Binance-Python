@@ -78,6 +78,19 @@ class SMISnapshot:
     smi: float              # valor del SMI
 
 @dataclass
+class SRLevel:
+    """
+    Un nivel de soporte o resistencia detectado por fractales.
+    """
+    symbol: str             # "BTCUSDT"
+    interval: str           # "4h", "1d"
+    idx: int                # índice de la vela en la serie
+    timestamp: datetime     # fecha/hora de la vela
+    price: float            # precio del nivel
+    level_type: str         # "support" / "resistance"
+    touches: int = 0        # cuántas velas tocan este nivel (fuerza)
+
+@dataclass
 class AnalysisRecord:
     """
     Un documento en MongoDB.
@@ -101,4 +114,5 @@ class AnalysisRecord:
     # }
     adx_points: List[ADXSnapshot] = field(default_factory=list)             # puntos ADX
     smi_points: List[SMISnapshot] = field(default_factory=list)             # puntos SMI
+    sr_levels: List[SRLevel] = field(default_factory=list)                  # soportes y resistencias
     created_at: datetime = None
