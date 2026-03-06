@@ -1,4 +1,4 @@
-# Crypto Project
+# Crypto Analysis
 
 ## Requisitos
 
@@ -11,6 +11,11 @@
 
 # Crear entorno virtual
 python -m venv venv
+
+# Desde la raíz del proyecto
+python3 -m venv venv
+
+# Activarlo
 source venv/bin/activate
 
 # Instalar dependencias
@@ -20,82 +25,107 @@ pip install -r requirements.txt
 pip install -e .
 ```
 
-## Estructura del proyecto
+## Qué hace el proyecto
+
+- Descarga velas OHLCV desde Binance
+- Calcula EMAs de 10, 55 y 200 periodos
+- Calcula ADX
+- Calcula SMI / Squeeze Momentum
+- Detecta tendencias por segmentos
+- Detecta soportes y resistencias por fractales con tolerancia basada en ATR
+- Cuenta cuántas velas tocan cada nivel S/R para medir su fuerza
+- Guarda velas, indicadores y análisis completos en MongoDB
+- Genera gráficos combinados y gráficos específicos de soportes/resistencias
+
+## Estructura actual del proyecto
 
 ```
-Binance-Python/
-├── models/
-│   └── metrics.py            # Dataclass SegmentMetrics
+crypto_analysis/
+├── dashboard/
+│   ├── chart_full.py         # Gráfico completo: velas + EMAs + S/R + tendencias + SMI + ADX
+│   ├── chart_sr.py           # Gráfico standalone de velas + soportes/resistencias
+│   └── dashboard.py          # Vista combinada original (tendencias + EMAs + pendientes)
+├── database/
+│   ├── __init__.py
+│   ├── database.py           # Conexión a MongoDB
+│   ├── repository.py         # Persistencia, índices y upserts
+│   └── schemas.py            # Dataclasses: Candle, trends, EMA, ADX, SMI, SR, AnalysisRecord
+├── indicators/
+│   ├── adx.py                # Cálculo de ADX y snapshots
+│   ├── emas.py               # Cálculo de EMAs y snapshots
+│   ├── levels.py             # Detección de soportes y resistencias con ATR y conteo de toques
+│   ├── prices.py             # Descarga y gráfico simple de precios
+│   └── smi.py                # Cálculo de Squeeze Momentum Indicator (SMI)
 ├── scripts/
-│   ├── classify_trends.py    # Detección y gráfico de tendencias
-│   ├── dashboard.py           # Vista combinada: tendencias + EMAs + pendientes
-│   ├── ema_analysis.py       # Cálculo y gráfico de EMAs con pendiente
-│   └── prices.py             # Descarga y visualización de precios desde Binance
+│   ├── classify_trends.py    # Detección y visualización de tendencias
+│   └── save_analysis.py      # Pipeline completo + guardado en MongoDB
 ├── services/
-│   └── binance.py            # Cliente de la API de Binance
+│   └── binance.py            # Cliente de Binance
 ├── utils/
-│   └── utils.py              # Funciones auxiliares
+│   ├── __init__.py
+│   └── utils.py              # Conversión de datos y utilidades de fechas/parámetros
 ├── pyproject.toml
 ├── requirements.txt
 └── README.md
 ```
 
-## Uso
+## Cómo ejecutar
+
+Activa el entorno virtual antes de correr cualquier módulo:
 
 ```bash
-# Ejecutar el detector de tendencias
+source venv/bin/activate
+```
+
+### Gráficos y análisis
+
+```bash
+# Detección y gráfico de tendencias
 python -m scripts.classify_trends
 
-# Ejecutar descarga de precios
-python -m scripts.prices
+# Dashboard original: tendencias + EMAs + pendientes
+python -m dashboard.dashboard
 
-# Ejecutar análisis de EMAs
-python -m scripts.ema_analysis
+# Gráfico completo: velas + EMAs + S/R + tendencias + SMI + ADX
+python -m dashboard.chart_full
 
-# Ejecutar dashboard combinado
-python -m scripts.dashboard
+# Gráfico velas + soportes/resistencias
+python -m dashboard.chart_sr
 ```
 
-### Salida esperada
+### Pipeline de guardado
 
-#### classify_trends.py
-
-Una tabla con las tendencias detectadas:
-
-```
- #  Régimen  Inicio →    Fin  Long    P.Inicio     P.Final             a   pct_slope        R²  Rango temporal
-──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
- 1  DOWN          0 →      9    10    98234.50    95123.80    -1160.4064    -1.6143%    0.9521  2026/02/04 07:59 → 2026/02/05 19:59
- 2  UP           10 →     18     9    95500.20    97800.10     +941.8293    +1.3953%    0.7276  2026/02/05 23:59 → 2026/02/07 07:59
- 3  SIDE         19 →     32    14    97650.00    97890.30     +117.0872    +0.1675%    0.2183  2026/02/07 11:59 → 2026/02/09 15:59
+```bash
+# Descarga velas, calcula tendencias, EMAs, ADX, SMI, S/R
+# y guarda todo en MongoDB
+python -m scripts.save_analysis
 ```
 
-Y un gráfico con:
-- Serie completa de precios
-- Zonas sombreadas (verde = UP, rojo = DOWN, gris = SIDE)
-- Recta de regresión sobre cada segmento
+### Módulos de indicadores
 
-#### ema_analysis.py
+```bash
+# EMAs y pendientes
+python -m indicators.emas
 
-Información de las EMAs:
-
-```
-Total de velas: 48
-  EMA  10:  Ultimo valor =     96542.30   Pendiente = +0.1523 %   Δ slope = +146.92 USDT
-  EMA  50:  Ultimo valor =     97010.85   Pendiente = +0.0312 %   Δ slope = +30.27 USDT
-  EMA 200:  Ultimo valor =     97250.40   Pendiente = +0.0078 %   Δ slope = +7.58 USDT
+# Descarga y gráfico básico de precios
+python -m indicators.prices
 ```
 
-Y un gráfico con dos subplots:
-- **Superior**: precio de cierre + EMAs superpuestas
-- **Inferior**: pendiente de cada EMA (cambio porcentual vela a vela)
+## Persistencia en MongoDB
 
-#### dashboard.py
+El pipeline guarda información en colecciones separadas para poder consultar o reconstruir el análisis después:
 
-Combina todo en una sola ejecución (descarga datos una vez). Muestra:
-- Tabla completa de tendencias
-- Información de EMAs con pendiente porcentual y absoluta
-- Gráfico con 3 subplots:
-  1. Precio + tendencias (zonas sombreadas + rectas de regresión)
-  2. Precio + EMAs (10, 50, 200)
-  3. Pendientes de las EMAs
+- `candles`
+- `trends`
+- `ema_snapshots`
+- `adx_snapshots`
+- `smi_snapshots`
+- `sr_levels`
+- `analysis`
+
+`AnalysisRecord` incluye el análisis consolidado del rango, junto con velas, tendencias, EMAs, ADX, SMI y soportes/resistencias.
+
+## Notas
+
+- Los scripts interactivos piden símbolo, temporalidad y rango de fechas en UTC.
+- `scripts.save_analysis` requiere una conexión a MongoDB configurada.
