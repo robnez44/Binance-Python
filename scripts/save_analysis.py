@@ -9,7 +9,7 @@ from indicators.emas import (compute_ema, ema_pct_slope, ema_slope, build_ema_sn
 from indicators.adx import compute_adx, build_adx_snapshots
 from indicators.smi import compute_squeeze, build_smi_snapshots
 from indicators.levels import find_support_resistance
-from utils.utils import ask_candles_params, toDicto
+from utils.utils import ask_candles_params, candles_to_dict
 from database.database import connectDB, disconnect
 from database.repository import (
     ensure_indexes, save_candles, save_trends,
@@ -18,14 +18,12 @@ from database.repository import (
 )
 from database.schemas import AnalysisRecord, Candle
 
-
 # ── Parámetros ────────────────────────────────────────────────────────────── #
 EMA_SPANS  = [10, 55, 200]
 WINDOW     = 10
 MIN_WIN    = 5
 MIN_R2     = 0.65
 PCT_SLOPE_MIN = 0.05
-
 
 async def main():
     # ── 1. Descarga de datos ──────────────────────────────────────────────
@@ -35,7 +33,7 @@ async def main():
     symbol   = params["symbol"]
     interval = params["interval"]
 
-    cleaned = [toDicto(kline) for kline in data]
+    cleaned = [candles_to_dict(kline) for kline in data]
     times   = pd.to_datetime([k["close_time"] for k in cleaned], utc=True)
     prices  = np.array([float(k["close_price"]) for k in cleaned], dtype=float)
     highs   = np.array([float(k["high_price"])  for k in cleaned], dtype=float)

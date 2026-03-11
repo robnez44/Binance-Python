@@ -1,7 +1,7 @@
 from services.binance import get_klines
 from scripts.classify_trends import find_all_trends
 from indicators.emas import compute_ema, ema_pct_slope, ema_slope, build_ema_snapshots
-from utils.utils import ask_candles_params, timestamp_to_utc, toDicto
+from utils.utils import ask_candles_params, timestamp_to_utc, candles_to_dict
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -16,7 +16,7 @@ if __name__ == "__main__":
     timestamp_ms = data[0][0]
     print("Fecha de apertura de la primera vela:", timestamp_to_utc(timestamp_ms))
 
-    cleaned_data = [toDicto(kline) for kline in data]
+    cleaned_data = [candles_to_dict(kline) for kline in data]
     times = pd.to_datetime([k["close_time"] for k in cleaned_data], utc=True)
     prices = np.array([float(k["close_price"]) for k in cleaned_data], dtype=float)
 

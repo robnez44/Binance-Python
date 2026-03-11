@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from typing import List, Optional, Tuple
 from database.schemas import SegmentMetrics
 from services.binance import get_klines
-from utils.utils import ask_candles_params, timestamp_to_utc, toDicto
+from utils.utils import ask_candles_params, timestamp_to_utc, candles_to_dict
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -272,7 +272,6 @@ def find_all_trends(
 
     return final
 
-
 # ──────────────────────────────────────────────────────────────────────────── #
 #  Bloque principal: descarga, análisis y gráfico
 # ──────────────────────────────────────────────────────────────────────────── #
@@ -288,7 +287,7 @@ if __name__ == "__main__":
     print("Fecha de apertura de la primera vela:", date_utc)
 
     # ── Limpiar y preparar datos ────────────────────────────────────────────────────────
-    cleaned_data = [toDicto(kline) for kline in data]
+    cleaned_data = [candles_to_dict(kline) for kline in data]
     print(json.dumps(cleaned_data[-1], indent=3, default=str))
 
     X = [k["close_time"] for k in cleaned_data]

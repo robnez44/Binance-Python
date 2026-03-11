@@ -1,6 +1,6 @@
 from services.binance import get_klines
 from indicators.levels import find_support_resistance
-from utils.utils import ask_candles_params, timestamp_to_utc, toDicto
+from utils.utils import ask_candles_params, timestamp_to_utc, candles_to_dict
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -12,7 +12,7 @@ if __name__ == "__main__":
     params = ask_candles_params()
     data = get_klines(params)
 
-    cleaned_data = [toDicto(kline) for kline in data]
+    cleaned_data = [candles_to_dict(kline) for kline in data]
     print("\nÚltima vela:")
     print(json.dumps(cleaned_data[-1], indent=3, default=str))
 

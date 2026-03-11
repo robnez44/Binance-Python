@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 from datetime import datetime, timezone
 from services.binance import get_klines
-from utils.utils import timestamp_to_utc, toDicto
+from utils.utils import timestamp_to_utc, candles_to_dict
 import pytz
 import json
 
@@ -29,7 +29,7 @@ date_utc = timestamp_to_utc(timestamp_ms)
 print("Fecha de apertura de la primera vela:", date_utc)
 
 # Limpiar los datos
-cleaned_data = [toDicto(kline) for kline in data]
+cleaned_data = [candles_to_dict(kline) for kline in data]
 print(json.dumps(cleaned_data[-1], indent=3, default=str)) # Ver la ultima  vela
 x = [k["close_time"] for k in cleaned_data]
 y = [k["close_price"] for k in cleaned_data]

@@ -4,7 +4,7 @@ from indicators.adx import compute_adx
 from indicators.smi import compute_squeeze
 from indicators.levels import find_support_resistance
 from scripts.classify_trends import find_all_trends
-from utils.utils import ask_candles_params, timestamp_to_utc, toDicto
+from utils.utils import ask_candles_params, timestamp_to_utc, candles_to_dict
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import numpy as np
@@ -20,7 +20,7 @@ if __name__ == "__main__":
     timestamp_ms = data[0][0]
     print("Fecha de apertura de la primera vela:", timestamp_to_utc(timestamp_ms))
 
-    cleaned_data = [toDicto(kline) for kline in data]
+    cleaned_data = [candles_to_dict(kline) for kline in data]
     print("\nÚltima vela:")
     print(json.dumps(cleaned_data[-1], indent=3, default=str))
 

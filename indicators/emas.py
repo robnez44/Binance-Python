@@ -1,6 +1,6 @@
 from services.binance import get_klines
 from database.schemas import EMASnapshot
-from utils.utils import ask_candles_params, timestamp_to_utc, toDicto
+from utils.utils import ask_candles_params, timestamp_to_utc, candles_to_dict
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -70,7 +70,6 @@ def build_ema_snapshots(
         ))
     return snapshots
 
-
 # ──────────────────────────────────────────────────────────────────────────── #
 #  Main
 # ──────────────────────────────────────────────────────────────────────────── #
@@ -86,7 +85,7 @@ if __name__ == "__main__":
     print("\nFecha de apertura de la primera vela:", date_utc)
 
     # ── Limpiar y preparar datos ──────────────────────────────────────────
-    cleaned_data = [toDicto(kline) for kline in data]
+    cleaned_data = [candles_to_dict(kline) for kline in data]
     print("\nInformacion de la última vela:")
     print(json.dumps(cleaned_data[-1], indent=3, default=str))
 
