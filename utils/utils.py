@@ -35,6 +35,7 @@ def trade_to_dict(trade) -> Dict[str, Any]:
     return {
         "entry_time": trade.entry_time,
         "exit_time": trade.exit_time,
+        "side": trade.side,
         "entry_index": trade.entry_index,
         "exit_index": trade.exit_index,
         "entry_price": trade.entry_price,
@@ -44,8 +45,6 @@ def trade_to_dict(trade) -> Dict[str, Any]:
         "return_pct": trade.return_pct,
         "candles_held": trade.candles_held,
         "exit_reason": trade.exit_reason,
-        "entry_fee": trade.entry_fee,
-        "exit_fee": trade.exit_fee,
         "equity_before": trade.equity_before,
         "equity_after": trade.equity_after,
     }
@@ -56,8 +55,7 @@ def config_to_dict(config) -> Optional[Dict[str, Any]]:
         return None
     return {
         "initial_capital": config.initial_capital,
-        "commission_pct": config.commission_pct,
-        "slippage_pct": config.slippage_pct,
+        "leverage": config.leverage,
         "stop_loss_pct": config.stop_loss_pct,
         "take_profit_pct": config.take_profit_pct,
     }

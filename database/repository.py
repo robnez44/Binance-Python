@@ -1,13 +1,12 @@
 from dataclasses import asdict
 from datetime import datetime, timezone
-from typing import List, Dict
-
+from typing import List, Dict, Optional
 from pymongo import UpdateOne
-
 from database.database import get_db
 from database.schemas import (
     Candle, SegmentMetrics, EMASnapshot, ADXSnapshot, SMISnapshot, SRLevel, AnalysisRecord,
 )
+from utils.utils import backtest_result_to_dict
 
 #  Índices únicos
 async def ensure_indexes() -> None:
@@ -81,6 +80,31 @@ async def save_candles(candles: List[Candle]) -> int:
     result = await db.candles.bulk_write(ops, ordered=False)
     return result.upserted_count + result.modified_count
 
+async def get_candles(
+    symbol: str,
+    interval: str,
+    start_time: Optional[datetime] = None,
+    end_time: Optional[datetime] = None,
+) -> List[Candle]:
+    """Obtiene candles ordenadas por `open_time` desde MongoDB."""
+    db = get_db()
+    query = {
+        "symbol": symbol,
+        "interval": interval,
+    }
+
+    if start_time or end_time:
+        query["open_time"] = {}
+        if start_time:
+            query["open_time"]["$gte"] = start_time
+        if end_time:
+            query["open_time"]["$lte"] = end_time
+
+    docs = await db.candles.find(query).sort("open_time", 1).to_list(length=None)
+    return [
+        Candle(**{k: v for k, v in doc.items() if k != "_id"})
+        for doc in docs
+    ]
 
 #  Trends
 async def save_trends(trends: List[SegmentMetrics]) -> int:
@@ -219,3 +243,53 @@ async def save_analysis(record: AnalysisRecord) -> str:
     )
 
     return str(result.upserted_id or "updated")
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  Backtesting
+# ══════════════════════════════════════════════════════════════════════════════
+
+async def save_backtest_result(result) -> str:
+    """
+    Guarda un BacktestResult en MongoDB. Retorna el _id del documento insertado.
+    """
+    db = get_db()
+    doc = backtest_result_to_dict(result)
+    insert_result = await db.backtests.insert_one(doc)
+    return str(insert_result.inserted_id)
+
+async def get_backtests(
+    symbol: Optional[str] = None,
+    interval: Optional[str] = None,
+    strategy_name: Optional[str] = None,
+    limit: int = 20,
+) -> List[Dict]:
+    """
+    Obtiene backtests guardados, ordenados por fecha de creación (más reciente primero).
+
+    Parámetros:
+    - symbol: filtrar por símbolo (opcional)
+    - interval: filtrar por temporalidad (opcional)
+    - strategy_name: filtrar por estrategia (opcional)
+    - limit: máximo de resultados (default 20)
+
+    Retorna lista de documentos (sin los trades para no sobrecargar).
+    """
+    db = get_db()
+    query = {}
+
+    if symbol:
+        query["symbol"] = symbol
+    if interval:
+        query["interval"] = interval
+    if strategy_name:
+        query["strategy_name"] = strategy_name
+
+    # Excluir trades del resultado para que sea más ligero
+    projection = {"trades": 0}
+
+    docs = await db.backtests.find(
+        query, projection
+    ).sort("created_at", -1).limit(limit).to_list(length=None)
+
+    return docs
+    
