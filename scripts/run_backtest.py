@@ -13,7 +13,6 @@ from database.database import connectDB, disconnect
 from database.repository import get_candles, save_backtest_result
 from utils.utils import parse_utc
 
-
 # ══════════════════════════════════════════════════════════════════════════════
 #  Input
 # ══════════════════════════════════════════════════════════════════════════════
@@ -41,11 +40,12 @@ def ask_backtest_params() -> dict:
             stop_loss_pct=(float(stop_loss_pct) / 100) if stop_loss_pct else None,
             take_profit_pct=(float(take_profit_pct) / 100) if take_profit_pct else None,
             breakeven_trigger_pct=(float(breakeven_pct) / 100) if breakeven_pct else None,
+            min_slope_pct=float(min_slope_pct) if min_slope_pct else 0.08,
+            exit_slope_periods=int(exit_slope_p) if exit_slope_p else 2,
         ),
         "min_slope_pct":      float(min_slope_pct) if min_slope_pct else 0.08,
         "exit_slope_periods": int(exit_slope_p) if exit_slope_p else 2,
     }
-
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  Contexto de indicadores por trade
@@ -121,7 +121,6 @@ def build_trade_context(
 
     return contexts
 
-
 # ══════════════════════════════════════════════════════════════════════════════
 #  Print resumen en terminal
 # ══════════════════════════════════════════════════════════════════════════════
@@ -135,7 +134,6 @@ def _reason_label(reason: str) -> str:
         "end_of_data":                 "⏹  end_of_data",
     }
     return labels.get(reason, reason)
-
 
 def print_summary(
     result: BacktestResult,
@@ -396,6 +394,7 @@ def plot_backtest(
 
         ax_price.axvspan(t_entry, t_exit, color=zone_c, alpha=0.35, zorder=1)
 
+        # Línea horizontal de stop loss dentro de la zona
         if trade.exit_reason in ("stop_loss", "breakeven_stop", "stop_loss_priority_same_bar"):
             ax_price.hlines(
                 trade.exit_price,

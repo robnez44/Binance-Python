@@ -58,6 +58,9 @@ def config_to_dict(config) -> Optional[Dict[str, Any]]:
         "leverage": config.leverage,
         "stop_loss_pct": config.stop_loss_pct,
         "take_profit_pct": config.take_profit_pct,
+        "breakeven_trigger_pct": config.breakeven_trigger_pct,
+        "min_slope_pct": config.min_slope_pct,
+        "exit_slope_periods": config.exit_slope_periods,
     }
 
 def backtest_result_to_dict(result) -> Dict[str, Any]:

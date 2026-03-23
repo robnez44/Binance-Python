@@ -2,30 +2,6 @@ import numpy as np
 from backtesting.records import StrategySignals
 from indicators.emas import compute_ema, ema_pct_slope
 
-def ema_cross_long_strategy(
-    prices: np.ndarray,
-    fast_span: int = 10,
-    slow_span: int = 55,
-) -> StrategySignals:
-    """Señales long simples basadas en cruce de EMA rápida sobre EMA lenta."""
-    ema_fast = compute_ema(prices, fast_span)
-    ema_slow = compute_ema(prices, slow_span)
-
-    entry_long = np.zeros(len(prices), dtype=bool)
-    exit_long  = np.zeros(len(prices), dtype=bool)
-
-    for i in range(1, len(prices)):
-        entry_long[i] = ema_fast[i - 1] <= ema_slow[i - 1] and ema_fast[i] > ema_slow[i]
-        exit_long[i]  = ema_fast[i - 1] >= ema_slow[i - 1] and ema_fast[i] < ema_slow[i]
-
-    return StrategySignals(
-        entry_long=entry_long,
-        exit_long=exit_long,
-        ema_fast=ema_fast,
-        ema_slow=ema_slow,
-        name=f"ema_{fast_span}_{slow_span}_cross_long",
-    )
-
 def ema_vertical_cross_long_strategy(
     prices: np.ndarray,
     highs: np.ndarray,
@@ -42,21 +18,17 @@ def ema_vertical_cross_long_strategy(
       2. Pendiente EMA 10 >= +min_slope_pct
       3. Precio de cierre por encima de EMA 10
 
-    SALIDA — las 3 condiciones deben cumplirse en la misma vela:
-      1. Pendiente EMA 10 negativa durante N velas consecutivas
+    SALIDA — las 2 condiciones deben cumplirse en la misma vela:
+      1. Pendiente EMA 10 negativa sostenida durante N velas consecutivas
          (exit_slope_periods velas seguidas con slope <= -min_slope_pct)
-         → detecta debilidad sostenida, no un retroceso de una sola vela
-      2. Pendiente EMA 10 <= -min_slope_pct en la vela actual
-      3. Precio de cierre por debajo de EMA 10
+      2. Precio de cierre por debajo de EMA 10
 
-    Por qué NO se usa el cruce inverso para salir:
-      El cruce de EMA 10 bajo EMA 55 ocurre mucho después de que el precio
-      ya cayó — cuando cruzan, la EMA 10 lleva varias velas descendiendo y
-      el precio ya perdió buena parte de las ganancias o incluso entró en
-      pérdida. La salida por pendiente sostenida reacciona antes: en cuanto
-      la EMA 10 muestra debilidad real (N velas negativas) y el precio está
-      bajo ella, se cierra. El stop loss sigue siendo la red de seguridad
-      para caídas abruptas.
+    Importante sobre el range del loop:
+      El loop de ENTRADA empieza en i=1 (necesita i-1 para el cruce).
+      El loop de SALIDA necesita mirar exit_slope_periods velas hacia atrás,
+      por lo que su condición se protege con un max(0, ...) en el range.
+      Ambas condiciones se evalúan en el mismo loop para evitar el bug
+      de empezar el loop en exit_slope_periods y saltarse cruces tempranos.
 
     Parámetros
     ----------
@@ -65,11 +37,8 @@ def ema_vertical_cross_long_strategy(
     fast_span          : periodo EMA rápida  (default 10)
     slow_span          : periodo EMA lenta   (default 55)
     min_slope_pct      : pendiente mínima en % (default 0.05)
-    exit_slope_periods : número de velas consecutivas con pendiente negativa
+    exit_slope_periods : velas consecutivas con pendiente negativa
                          necesarias para confirmar la salida (default 2)
-                         · 1 = salida más rápida (más señales, puede ser ruido)
-                         · 2 = balance entre rapidez y confirmación
-                         · 3+ = más conservador, sale más tarde
     """
     ema_fast       = compute_ema(prices, fast_span)
     ema_slow       = compute_ema(prices, slow_span)
@@ -78,29 +47,29 @@ def ema_vertical_cross_long_strategy(
     entry_long = np.zeros(len(prices), dtype=bool)
     exit_long  = np.zeros(len(prices), dtype=bool)
 
-    for i in range(exit_slope_periods, len(prices)):
+    # El loop empieza siempre en i=1 para no saltarse ningún cruce.
+    # La condición de salida maneja internamente el lookback necesario.
+    for i in range(1, len(prices)):
 
         # ── ENTRADA ─────────────────────────────────────────────────────
+        # Cruce: en i-1 la EMA 10 estaba por debajo, en i ya está por encima.
+        # La señal queda en la vela i → ejecución al open de i+1.
         cross_up  = ema_fast[i - 1] <= ema_slow[i - 1] and ema_fast[i] > ema_slow[i]
         strong_up = fast_slope_pct[i] >= min_slope_pct
         above_ema = prices[i] > ema_fast[i]
         entry_long[i] = cross_up and strong_up and above_ema
 
         # ── SALIDA ──────────────────────────────────────────────────────
-        # Condición 1: pendiente negativa sostenida en las últimas N velas
-        # Se verifica que TODAS las velas desde [i - exit_slope_periods + 1]
-        # hasta [i] tengan pendiente <= -min_slope_pct.
-        # Esto filtra retrocesos de una sola vela y solo sale cuando la
-        # debilidad es real y continuada.
-        sustained_down = all(
-            fast_slope_pct[j] <= -min_slope_pct
-            for j in range(i - exit_slope_periods + 1, i + 1)
-        )
-
-        # Condición 2: precio por debajo de EMA 10
-        below_ema = prices[i] < ema_fast[i]
-
-        exit_long[i] = sustained_down and below_ema
+        # Necesitamos exit_slope_periods velas hacia atrás.
+        # Si i < exit_slope_periods no hay suficiente historia → False.
+        if i >= exit_slope_periods:
+            sustained_down = all(
+                fast_slope_pct[j] <= -min_slope_pct
+                for j in range(i - exit_slope_periods + 1, i + 1)
+            )
+            below_ema = prices[i] < ema_fast[i]
+            exit_long[i] = sustained_down and below_ema
+        # Si i < exit_slope_periods, exit_long[i] queda False (inicializado)
 
     return StrategySignals(
         entry_long=entry_long,

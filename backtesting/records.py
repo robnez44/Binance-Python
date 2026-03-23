@@ -14,6 +14,8 @@ class BacktestConfig:
     stop_loss_pct:          Optional[float] = 0.02  # Stop Loss: si el precio cae este %, se cierra la posición
     take_profit_pct:        Optional[float] = 0.04  # Take Profit: si el precio sube este %, se cierra con ganancia (0.04 = 4%). None = sin take profit
     breakeven_trigger_pct:  Optional[float] = None  # Breakeven: cuando el precio sube este % desde la entrada, el stop se mueve al precio de entrada (riesgo cero).
+    min_slope_pct:          float = 0.08            # Pendiente mínima de EMA 10 (en %) para validar señales
+    exit_slope_periods:     int = 2                 # Velas consecutivas con pendiente negativa para confirmar salida
 
 @dataclass
 class Trade:
