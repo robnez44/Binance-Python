@@ -48,6 +48,137 @@ def ask_backtest_params() -> dict:
     }
 
 # ══════════════════════════════════════════════════════════════════════════════
+#  Debug de señales — imprime tabla detallada vela a vela
+# ══════════════════════════════════════════════════════════════════════════════
+def debug_signals(
+    times: pd.DatetimeIndex,
+    closes: np.ndarray,
+    opens: np.ndarray,
+    signals,
+    slope_pct: np.ndarray,
+    result: BacktestResult,
+    min_slope_pct: float,
+) -> None:
+    """
+    Imprime una tabla con todas las velas donde:
+      - Hay señal de entrada (entry_long = True)
+      - O hay señal de salida (exit_long = True)
+      - O hay un trade ejecutado (entrada o salida)
+
+    Para cada vela muestra:
+      - índice y fecha
+      - EMA 10, EMA 55, pendiente, precio de cierre
+      - si las condiciones de entrada se cumplen individualmente
+      - si es señal o ejecución
+    """
+    W = 110
+    print()
+    print("═" * W)
+    print("  DEBUG DE SEÑALES")
+    print("═" * W)
+
+    # Índices de ejecución real de trades (para marcarlos)
+    entry_exec = {t.entry_index: t for t in result.trades}
+    exit_exec  = {t.exit_index:  t for t in result.trades}
+
+    # Recopilar índices relevantes: señales + ejecuciones + velas adyacentes
+    relevant = set()
+    for i, (e, x) in enumerate(zip(signals.entry_long, signals.exit_long)):
+        if e or x:
+            # Añadir también la vela anterior y la siguiente para contexto
+            relevant.update([max(0, i - 1), i, min(len(closes) - 1, i + 1)])
+    for idx in list(entry_exec.keys()) + list(exit_exec.keys()):
+        relevant.update([max(0, idx - 1), idx, min(len(closes) - 1, idx + 1)])
+
+    if not relevant:
+        print("  No hay señales ni trades en el rango.")
+        print("═" * W)
+        return
+
+    # Cabecera de la tabla
+    print(
+        f"  {'idx':>5}  "
+        f"{'Fecha':>16}  "
+        f"{'Close':>10}  "
+        f"{'EMA10':>10}  "
+        f"{'EMA55':>10}  "
+        f"{'Slope%':>8}  "
+        f"{'10>55':>5}  "
+        f"{'Slp≥mn':>6}  "
+        f"{'P>E10':>5}  "
+        f"{'Evento'}"
+    )
+    print("  " + "─" * (W - 2))
+
+    prev_group = -99
+    for i in sorted(relevant):
+        # Separador si hay salto entre grupos de velas
+        if i > prev_group + 2:
+            print("  " + "·" * (W - 2))
+        prev_group = i
+
+        ema10  = signals.ema_fast[i]
+        ema55  = signals.ema_slow[i]
+        slope  = slope_pct[i]
+        price  = closes[i]
+        fecha  = times[i].strftime("%m-%d %H:%M")
+
+        cross_ok  = ema10 > ema55
+        slope_ok  = slope >= min_slope_pct
+        above_ok  = price > ema10
+
+        cross_s = "✔" if cross_ok else "✘"
+        slope_s = "✔" if slope_ok else "✘"
+        above_s = "✔" if above_ok else "✘"
+
+        # Determinar qué tipo de evento es esta vela
+        eventos = []
+        if signals.entry_long[i]:
+            conds = "✔✔✔" if (cross_ok and slope_ok and above_ok) else f"{cross_s}{slope_s}{above_s}"
+            eventos.append(f"SEÑAL ENTRADA [{conds}]  → ejecuta al open[{i+1}]={opens[i+1]:,.2f}")
+        if signals.exit_long[i]:
+            eventos.append(f"SEÑAL SALIDA  → ejecuta al open[{i+1}]={opens[i+1]:,.2f}")
+        if i in entry_exec:
+            t = entry_exec[i]
+            eventos.append(f"EJECUCION ENTRADA  open={t.entry_price:,.2f}")
+        if i in exit_exec:
+            t = exit_exec[i]
+            eventos.append(f"EJECUCION SALIDA   open={t.exit_price:,.2f}  ({t.exit_reason})")
+
+        evento_str = "  |  ".join(eventos) if eventos else ""
+
+        slope_sign = "+" if slope >= 0 else ""
+        print(
+            f"  {i:>5}  "
+            f"{fecha:>16}  "
+            f"{price:>10,.2f}  "
+            f"{ema10:>10,.2f}  "
+            f"{ema55:>10,.2f}  "
+            f"{slope_sign}{slope:>7.4f}  "
+            f"  {cross_s}    "
+            f"  {slope_s}    "
+            f"  {above_s}  "
+            f"{evento_str}"
+        )
+
+    print("  " + "─" * (W - 2))
+    print()
+
+    # Resumen compacto de trades
+    print("  RESUMEN DE TRADES")
+    print("  " + "─" * 60)
+    for idx, t in enumerate(result.trades, 1):
+        pnl_s = "+" if t.pnl >= 0 else ""
+        print(
+            f"  Trade #{idx}  "
+            f"señal[{t.entry_index - 1}] → exec_entry[{t.entry_index}]  "
+            f"señal_exit[{t.exit_index - 1}] → exec_exit[{t.exit_index}]  "
+            f"PnL: {pnl_s}${t.pnl:,.2f}  ({t.exit_reason})"
+        )
+    print("═" * W)
+    print()
+
+# ══════════════════════════════════════════════════════════════════════════════
 #  Contexto de indicadores por trade
 # ══════════════════════════════════════════════════════════════════════════════
 def build_trade_context(
@@ -58,44 +189,21 @@ def build_trade_context(
     min_slope_pct: float,
     exit_slope_periods: int,
 ) -> list:
-    """
-    Calcula los valores de los indicadores en la vela de SEÑAL de cada trade.
-
-    Importante:
-      - La entrada se ejecuta al open de la vela i+1, así que la señal de
-        entrada se evaluó en la vela entry_index - 1.
-      - La salida por señal se ejecuta al open de exit_index + 1, así que la
-        señal de salida se evaluó en exit_index - 1... pero el simulador
-        registra exit_index como la vela donde se abrió la ejecución (i+1).
-        Por eso la señal de salida fue en exit_index - 1.
-
-    En ambos casos: mostramos la vela donde se tomó la decisión, no donde
-    se ejecutó el precio.
-    """
     contexts = []
 
     for trade in result.trades:
-        # Vela de señal de ENTRADA: la condición se evaluó en entry_index - 1
-        # La ejecución fue al open de entry_index
-        si = trade.entry_index - 1   # signal index (entrada)
+        si = trade.entry_index - 1
+        xi = max(trade.exit_index - 1, 0)
 
-        # Vela de señal de SALIDA: para signal_exit, la condición se evaluó
-        # en exit_index - 1 y la ejecución fue al open de exit_index
-        xi = trade.exit_index - 1    # signal index (salida)
-        xi = max(xi, 0)
-
-        # ── Valores en la vela de SEÑAL de entrada ───────────────────────
         ema10_entry = signals.ema_fast[si]
         ema55_entry = signals.ema_slow[si]
         slope_entry = slope_pct[si]
         price_entry = closes[si]
 
-        # ── Valores en la vela de SEÑAL de salida ────────────────────────
         ema10_exit  = signals.ema_fast[xi]
         slope_exit  = slope_pct[xi]
         price_exit  = closes[xi]
 
-        # Velas consecutivas con pendiente negativa hasta la señal de salida
         neg_streak = 0
         if trade.exit_reason == "signal_exit":
             for j in range(xi, max(xi - exit_slope_periods - 10, -1), -1):
@@ -107,12 +215,10 @@ def build_trade_context(
         contexts.append({
             "signal_index_entry": si,
             "signal_index_exit":  xi,
-            # Entrada
             "ema10_entry":  ema10_entry,
             "ema55_entry":  ema55_entry,
             "slope_entry":  slope_entry,
             "price_entry":  price_entry,
-            # Salida
             "ema10_exit":   ema10_exit,
             "slope_exit":   slope_exit,
             "price_exit":   price_exit,
@@ -145,13 +251,11 @@ def print_summary(
     SEP2 = "═" * W
     config = params["config"]
 
-    # ── Cabecera ──────────────────────────────────────────────────────────
     print()
     print(SEP2)
     print(f"  BACKTEST RESULT  ·  {params['symbol']}  ·  {params['interval']}")
     print(SEP2)
 
-    # ── Configuración ─────────────────────────────────────────────────────
     print()
     print(f"  {'Estrategia':<28} {result.strategy_name}")
     start_label = params["start_time"].strftime("%Y-%m-%d")
@@ -169,7 +273,6 @@ def print_summary(
     print(f"  {'Velas para salida':<28} {params['exit_slope_periods']}")
     print(f"  {'Pendiente mínima':<28} {params['min_slope_pct']:.4f}%")
 
-    # ── Rendimiento ───────────────────────────────────────────────────────
     print()
     print(SEP)
     print(f"  RENDIMIENTO")
@@ -182,7 +285,6 @@ def print_summary(
     print(f"  {'Retorno total':<28} {ret_sign}{result.total_return_pct:.2f}%")
     print(f"  {'Max Drawdown':<28} {result.max_drawdown_pct:.2f}%")
 
-    # ── Trades resumen ────────────────────────────────────────────────────
     print()
     print(SEP)
     print(f"  TRADES")
@@ -207,7 +309,6 @@ def print_summary(
         print(SEP2)
         return
 
-    # ── Detalle por trade ─────────────────────────────────────────────────
     print()
     print(SEP)
     print(f"  DETALLE DE OPERACIONES")
@@ -228,13 +329,9 @@ def print_summary(
         )
         print(f"  P.Entrada: {t.entry_price:,.2f}   P.Salida: {t.exit_price:,.2f}")
 
-        # ── Condiciones de ENTRADA ────────────────────────────────────────
-        # Nota: se muestran los valores de la vela de SEÑAL (entry_index - 1),
-        # no de la vela de ejecución (entry_index). La condición se evaluó
-        # en la vela de señal; la ejecución fue al open de la siguiente.
         print()
         si_label = ctx["signal_index_entry"]
-        print(f"  ENTRADA — vela de señal #{si_label} (ejecución al open de la vela siguiente)")
+        print(f"  ENTRADA — vela de señal #{si_label} → ejecución al open de vela #{t.entry_index}")
 
         ema10_e  = ctx["ema10_entry"]
         ema55_e  = ctx["ema55_entry"]
@@ -258,15 +355,12 @@ def print_summary(
         print(f"         Precio = {price_e:>12,.2f}")
         print(f"         EMA 10 = {ema10_e:>12,.2f}")
 
-        # ── Condiciones de SALIDA ─────────────────────────────────────────
         print()
         xi_label = ctx["signal_index_exit"]
         print(f"  SALIDA — {_reason_label(t.exit_reason)}")
 
         if t.exit_reason == "signal_exit":
-            # La señal se evaluó en exit_index - 1; la ejecución fue al open
-            # de exit_index. Mostramos los valores de la vela de señal.
-            print(f"  (vela de señal #{xi_label} — ejecución al open de la vela siguiente)")
+            print(f"  (vela de señal #{xi_label} → ejecución al open de vela #{t.exit_index})")
 
             ema10_x  = ctx["ema10_exit"]
             slope_x  = ctx["slope_exit"]
@@ -309,8 +403,6 @@ def print_summary(
     print()
     print(SEP2)
     print()
-
-
 # ══════════════════════════════════════════════════════════════════════════════
 #  Gráfico limpio: velas + EMAs + marcadores de trades
 # ══════════════════════════════════════════════════════════════════════════════
@@ -348,7 +440,6 @@ def plot_backtest(
     ax_price.grid(True, alpha=0.25, color="gray", linewidth=0.5)
     ax_equity.grid(True, alpha=0.25, color="gray", linewidth=0.5)
 
-    # ── Velas ────────────────────────────────────────────────────────────
     candle_width = (times[1] - times[0]) * 0.6 if len(times) > 1 else pd.Timedelta(hours=4)
     bull_mask    = closes >= opens
     bear_mask    = ~bull_mask
@@ -368,7 +459,45 @@ def plot_backtest(
     ax_price.vlines(times[bear_mask], lows[bear_mask], highs[bear_mask],
                     color=BEAR, linewidth=0.9, zorder=2)
 
-    # ── EMAs ─────────────────────────────────────────────────────────────
+    # ── Índice de vela dentro del cuerpo (debug visual sutil) ──────────
+    # Se dibuja pequeño y con color cercano al de la vela para no distraer.
+    price_span = max(highs.max() - lows.min(), 1e-9)
+    min_body_h = price_span * 0.0012
+    text_color_bull = "#0f766e"  # variante más oscura de BULL
+    text_color_bear = "#b71c1c"  # variante más oscura de BEAR
+
+    for i in range(len(times)):
+        o = opens[i]
+        c = closes[i]
+        body_low = min(o, c)
+        body_high = max(o, c)
+        body_h = body_high - body_low
+
+        # Si la vela es casi doji, damos una altura mínima visual para centrar texto.
+        center_y = body_low + (max(body_h, min_body_h) / 2)
+        txt_color = text_color_bull if c >= o else text_color_bear
+        idx_text = str(i)
+        digits = len(idx_text)
+        if digits == 1:
+            idx_font = 5.0
+        elif digits == 2:
+            idx_font = 3.6
+        else:
+            idx_font = 3.0
+
+        ax_price.text(
+            times[i],
+            center_y,
+            idx_text,
+            ha="center",
+            va="center",
+            fontsize=idx_font,
+            color=txt_color,
+            alpha=0.75,
+            zorder=4,
+            clip_on=True,
+        )
+
     ax_price.plot(times, signals.ema_fast, color=EMA_FAST,
                   linewidth=1.6, label="EMA 10", zorder=4)
     ax_price.plot(times, signals.ema_slow, color=EMA_SLOW,
@@ -434,7 +563,6 @@ def plot_backtest(
     ax_price.set_ylabel("Precio (USDT)", fontsize=9)
     plt.setp(ax_price.get_xticklabels(), visible=False)
 
-    # ── Curva de equity ───────────────────────────────────────────────────
     eq_times  = [times[0]]
     eq_values = [result.initial_capital]
     for trade in result.trades:
@@ -471,8 +599,6 @@ def plot_backtest(
         pass
 
     plt.show()
-
-
 # ══════════════════════════════════════════════════════════════════════════════
 #  Main
 # ══════════════════════════════════════════════════════════════════════════════
@@ -538,6 +664,17 @@ async def main() -> None:
             exit_slope_periods=params["exit_slope_periods"],
         )
 
+        # Debug de señales — imprime tabla vela a vela
+        debug_signals(
+            times=times,
+            closes=closes,
+            opens=opens,
+            signals=signals,
+            slope_pct=slope_pct,
+            result=result,
+            min_slope_pct=params["min_slope_pct"],
+        )
+
         print_summary(result, params, trade_contexts)
 
         backtest_id = await save_backtest_result(result)
@@ -548,7 +685,5 @@ async def main() -> None:
 
     finally:
         await disconnect()
-
-
 if __name__ == "__main__":
     asyncio.run(main())
