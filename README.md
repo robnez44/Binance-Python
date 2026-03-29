@@ -34,13 +34,20 @@ pip install -e .
 - Detecta tendencias por segmentos
 - Detecta soportes y resistencias por fractales con tolerancia basada en ATR
 - Cuenta cuántas velas tocan cada nivel S/R para medir su fuerza
+- Ejecuta backtesting long (EMA 10/55)
 - Guarda velas, indicadores y análisis completos en MongoDB
+- Guarda resultados de backtesting (trades + métricas) en MongoDB
 - Genera gráficos combinados y gráficos específicos de soportes/resistencias
 
 ## Estructura actual del proyecto
 
 ```
 crypto_analysis/
+├── backtesting/
+│   ├── metrics.py            # Métricas: retorno, win rate, profit factor, max drawdown
+│   ├── records.py            # Dataclasses: BacktestConfig, Trade, StrategySignals, BacktestResult
+│   ├── simulator.py          # Motor de simulación (ejecución al open siguiente)
+│   └── strategies.py         # Estrategia EMA 10/55
 ├── dashboard/
 │   ├── chart_full.py         # Gráfico completo: velas + EMAs + S/R + tendencias + SMI + ADX
 │   ├── chart_sr.py           # Gráfico standalone de velas + soportes/resistencias
@@ -58,6 +65,7 @@ crypto_analysis/
 │   └── smi.py                # Cálculo de Squeeze Momentum Indicator (SMI)
 ├── scripts/
 │   ├── classify_trends.py    # Detección y visualización de tendencias
+│   ├── run_backtest.py       # Backtesting long + resumen + gráfico + guardado en MongoDB
 │   └── save_analysis.py      # Pipeline completo + guardado en MongoDB
 ├── services/
 │   └── binance.py            # Cliente de Binance
@@ -101,6 +109,21 @@ python -m dashboard.chart_sr
 python -m scripts.save_analysis
 ```
 
+### Backtesting
+
+```bash
+# Ejecuta backtesting long (EMA 10/55), imprime resumen detallado,
+# grafica trades/equity y guarda el resultado en MongoDB
+python -m scripts.run_backtest
+```
+
+Notas de uso para backtesting:
+
+- `scripts.run_backtest` lee velas desde MongoDB (`candles`) en el rango indicado.
+- Si no hay velas para el rango, primero ejecuta `python -m scripts.save_analysis`.
+- El script pide parámetros interactivos: símbolo, temporalidad, rango UTC,
+  breakeven, pendiente mínima y ajustes de filtro de tendencia/riesgo adaptativo.
+
 ### Módulos de indicadores
 
 ```bash
@@ -122,10 +145,18 @@ El pipeline guarda información en colecciones separadas para poder consultar o 
 - `smi_snapshots`
 - `sr_levels`
 - `analysis`
+- `backtests`
 
 `AnalysisRecord` incluye el análisis consolidado del rango, junto con velas, tendencias, EMAs, ADX, SMI y soportes/resistencias.
+
+La colección `backtests` guarda cada ejecucion con:
+
+- configuración usada (`BacktestConfig`)
+- lista completa de operaciones (`trades`)
+- métricas agregadas (capital final, retorno, win rate, profit factor, max drawdown)
 
 ## Notas
 
 - Los scripts interactivos piden símbolo, temporalidad y rango de fechas en UTC.
 - `scripts.save_analysis` requiere una conexión a MongoDB configurada.
+- `scripts.run_backtest` también requiere MongoDB y datos de velas previamente guardados.
