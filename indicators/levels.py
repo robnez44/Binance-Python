@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from typing import List, Tuple
-from indicators.adx import true_range
+from indicators.atr import true_range
 from database.schemas import SRLevel
 
 def _count_touches(

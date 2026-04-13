@@ -1,19 +1,10 @@
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 from database.schemas import ADXSnapshot
+from indicators.atr import compute_atr, true_range
 
 def smoothing(series: pd.Series, n: int) -> pd.Series:
     return series.ewm(alpha=1/n, adjust=False).mean()
-
-def true_range(high: pd.Series, low: pd.Series, close: pd.Series) -> pd.Series:
-    prev_close = close.shift(1)
-    tr = pd.concat([
-        high - low,
-        (high - prev_close).abs(),
-        (low - prev_close).abs()
-    ], axis=1).max(axis=1)
-    return tr
 
 def compute_adx(high: pd.Series, low: pd.Series, close: pd.Series, n: int = 14) -> pd.DataFrame:
     high, low, close = high.astype(float), low.astype(float), close.astype(float)
@@ -28,9 +19,8 @@ def compute_adx(high: pd.Series, low: pd.Series, close: pd.Series, n: int = 14) 
     plus_dm = pd.Series(plus_dm, index=high.index)
     minus_dm = pd.Series(minus_dm, index=high.index)
 
-    # Cálculo del ATR y suavizado de +DM y -DM
-    tr = true_range(high, low, close)
-    atr = smoothing(tr, n)
+    # Cálculo del ATR reutilizando indicators.atr (evita duplicación)
+    atr = compute_atr(high, low, close, n=n)
     plus_dm_smoothed = smoothing(plus_dm, n)
     minus_dm_smoothed = smoothing(minus_dm, n)
 

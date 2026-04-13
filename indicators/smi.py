@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from indicators.adx import true_range
+from indicators.atr import true_range
 from database.schemas import SMISnapshot
 
 def compute_squeeze(
