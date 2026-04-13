@@ -329,10 +329,11 @@ if __name__ == "__main__":
     fig, ax = plt.subplots(figsize=(14, 6))
 
     # Serie completa de precios
-    ax.plot(times, float_prices, marker="o", ms=3, color="steelblue", linewidth=1, label="Close price", zorder=2)
+    ax.plot(times, float_prices, marker="o", ms=3, color="steelblue", linewidth=1, label="Precio cierre", zorder=2)
 
     # Graficar cada tendencia
-    for i, seg in enumerate(trends, 1):
+    labeled_regimes = set()
+    for seg in trends:
         c = color_map[seg.regime]
 
         # Zona sombreada
@@ -342,14 +343,22 @@ if __name__ == "__main__":
         # Recta y = a·x + b sobre la subventana
         x_seg = np.arange(seg.length, dtype=float)
         y_seg = seg.a * x_seg + seg.b
-        ax.plot(times[seg.start_idx : seg.end_idx + 1], y_seg,
-                linewidth=2, linestyle="--", color=c, zorder=3,
-                label=f"#{i} {seg.regime} L={seg.length} R²={seg.r2:.3f}")
+        regime_label = seg.regime if seg.regime not in labeled_regimes else None
+        ax.plot(
+            times[seg.start_idx : seg.end_idx + 1],
+            y_seg,
+            linewidth=2,
+            linestyle="--",
+            color=c,
+            zorder=3,
+            label=regime_label,
+        )
+        labeled_regimes.add(seg.regime)
 
     ax.set_xlabel("Fecha de cierre (UTC)")
     ax.set_ylabel("Precio de cierre (USDT)")
     ax.set_title("BTCUSDT • 4h • Segmentación de tendencias")
-    ax.legend(loc="best", fontsize=8, ncol=2)
+    ax.legend(loc="best", fontsize=8)
     ax.grid(True, alpha=0.2)
     fig.autofmt_xdate()
     plt.tight_layout()
