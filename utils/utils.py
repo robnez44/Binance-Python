@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from decimal import Decimal
+from backtesting.records import Trade, BacktestConfig, BacktestResult
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  Conversión de timestamps
@@ -30,7 +31,7 @@ def candles_to_dict(kline: List[Any]) -> Dict[str, Any]:
         "taker_buy_quote_asset_volume": Decimal(kline[10]),
     }
 
-def trade_to_dict(trade) -> Dict[str, Any]:
+def trade_to_dict(trade: Trade) -> Dict[str, Any]:
     """Convierte un Trade (dataclass) a diccionario para MongoDB."""
     return {
         "entry_time": trade.entry_time,
@@ -49,7 +50,7 @@ def trade_to_dict(trade) -> Dict[str, Any]:
         "equity_after": trade.equity_after,
     }
 
-def config_to_dict(config) -> Optional[Dict[str, Any]]:
+def config_to_dict(config: BacktestConfig) -> Optional[Dict[str, Any]]:
     """Convierte un BacktestConfig (dataclass) a diccionario para MongoDB."""
     if config is None:
         return None
@@ -61,9 +62,17 @@ def config_to_dict(config) -> Optional[Dict[str, Any]]:
         "breakeven_trigger_pct": config.breakeven_trigger_pct,
         "min_slope_pct": config.min_slope_pct,
         "exit_slope_periods": config.exit_slope_periods,
+        "ema_gap_min_pct": config.ema_gap_min_pct,
+        "adx_min": config.adx_min,
+        "adx_require_di": config.adx_require_di,
+        "adx_require_rising": config.adx_require_rising,
+        "atr_period": config.atr_period,
+        "atr_stop_mult": config.atr_stop_mult,
+        "atr_trailing_mult": config.atr_trailing_mult,
+        "atr_stop_confirm_on_close": config.atr_stop_confirm_on_close,
     }
 
-def backtest_result_to_dict(result) -> Dict[str, Any]:
+def backtest_result_to_dict(result: BacktestResult) -> Dict[str, Any]:
     """Convierte un BacktestResult completo a diccionario para MongoDB."""
     return {
         "symbol": result.symbol,
@@ -81,6 +90,7 @@ def backtest_result_to_dict(result) -> Dict[str, Any]:
         "profit_factor": result.profit_factor if result.profit_factor != float("inf") else 999.0,
         "avg_trade_return_pct": result.avg_trade_return_pct,
         "max_drawdown_pct": result.max_drawdown_pct,
+        "report_pdf_filename": result.report_pdf_filename,
         "config": config_to_dict(result.config),
         "trades": [trade_to_dict(t) for t in result.trades],
         "created_at": result.created_at or datetime.now(timezone.utc),

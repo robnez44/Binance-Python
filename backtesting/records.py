@@ -16,6 +16,22 @@ class BacktestConfig:
     breakeven_trigger_pct:  Optional[float] = None  # Breakeven: cuando el precio sube este % desde la entrada, el stop se mueve al precio de entrada (riesgo cero).
     min_slope_pct:          float = 0.08            # Pendiente mínima de EMA 10 (en %) para validar señales
     exit_slope_periods:     int = 2                 # Velas consecutivas con pendiente negativa para confirmar salida
+    ema_gap_min_pct:        float = 0.0             # Separación mínima EMA10-EMA55 en % para validar cruces (0.0 = desactivado)
+    adx_min:                float          = 0.0
+    # ADX mínimo para confirmar tendencia en la entrada.
+    # 0.0 = desactivado (sin filtro ADX).
+    # 23.0 = solo entrar cuando ADX >= 23 (tendencia confirmada).
+    # Niveles de referencia:
+    #   < 20  → mercado lateral / sin tendencia
+    #   20-25 → tendencia débil emergente
+    #   >= 25 → tendencia fuerte
+    #   >= 40 → tendencia muy fuerte (posible sobreextensión)
+    adx_require_di:         bool = True             # Si True, exige +DI > -DI para validar entrada con ADX
+    adx_require_rising:     bool = False            # Si True, exige ADX no decreciente (más estricto)
+    atr_period:             int = 14                # Periodo ATR para stops dinámicos
+    atr_stop_mult:          Optional[float] = None  # Stop inicial dinámico: entrada - ATR * multiplicador
+    atr_trailing_mult:      Optional[float] = None  # Trailing stop dinámico: max_close - ATR * multiplicador
+    atr_stop_confirm_on_close: bool = True          # Si True, ATR stop/trailing se confirma por cierre (evita barridos por mecha)
 
 @dataclass
 class Trade:
@@ -37,18 +53,24 @@ class Trade:
     exit_reason:    str         # Por que salio: stop loss, take profit, señal de salida o fin de datos
     equity_before:  float       # Capital que se tenía antes de este trade
     equity_after:   float       # Capital que se tiene después de este trade (equity_before + pnl)
-
 @dataclass
 class StrategySignals:
     """
     Señales de la estrategia para cada vela.
     Generadas por una función de estrategia (ej: ema_cross_long_strategy).
     """
-    entry_long: np.ndarray  # Array booleano: True en velas donde hay señal de compra
-    exit_long:  np.ndarray  # Array booleano: True en velas donde hay señal de venta
-    ema_fast:   np.ndarray  # Valores de la EMA rápida (para debug/gráficos)
-    ema_slow:   np.ndarray  # Valores de la EMA lenta (para debug/gráficos)
-    name:       str = ""    # Nombre de la estrategia (ej: "ema_cross_long", "adx_smi_strategy", etc.)
+    entry_long: np.ndarray                      # Array booleano: True en velas donde hay señal de compra
+    exit_long:  np.ndarray                      # Array booleano: True en velas donde hay señal de venta
+    ema_fast:   np.ndarray                      # Valores de la EMA rápida (para debug/gráficos)
+    ema_slow:   np.ndarray                      # Valores de la EMA lenta (para debug/gráficos)
+    name:       str = ""                        # Nombre de la estrategia (ej: "ema_cross_long", "adx_smi_strategy", etc.)
+    adx_values: Optional[np.ndarray] = None     # ADX por vela (None si la estrategia no usa ADX)
+    plus_di:    Optional[np.ndarray] = None     # +DI por vela
+    minus_di:   Optional[np.ndarray] = None     # -DI por vela
+    entry_base_long: Optional[np.ndarray] = None    # Señal base EMA antes de filtros
+    filter_total_count: Optional[np.ndarray] = None # Cantidad de filtros activos evaluados por vela
+    filter_pass_count: Optional[np.ndarray] = None  # Cantidad de filtros que pasaron por vela
+    active_filters: List[str] = field(default_factory=list)  # Nombres de filtros activos en la estrategia
 
 @dataclass
 class BacktestResult:
@@ -73,5 +95,6 @@ class BacktestResult:
     avg_trade_return_pct:   float = 0.0                                 # Retorno promedio por trade en %
     max_drawdown_pct:       float = 0.0                                 # Maxima caída desde un pico de capital (peor momento) # Ej: si llegaste a 12,000 y cayó a 10,000, el drawdown fue 16.67%
     strategy_name:          str = ""                                    # Nombre de la estrategia (ej: "ema_cross_long", "adx_smi_strategy", etc.)
+    report_pdf_filename:    Optional[str] = None                        # Nombre del PDF generado con el gráfico del backtest
     config:                 Optional[BacktestConfig] = None             # Configuracion usada (para reproducibilidad)
     created_at:             Optional[datetime] = None                   # Fecha en que se corrio el backtest

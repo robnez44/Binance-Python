@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 from backtesting.metrics import summarize_backtest
 from backtesting.records import BacktestConfig, BacktestResult, Trade
+from indicators.atr import compute_atr
 
 def _close_long_trade(
     position: dict,
@@ -43,6 +44,68 @@ def _close_long_trade(
         equity_before=position["equity_before"],
         equity_after=equity_after,
     )
+
+def _resolve_initial_stop_price(
+    entry_price: float,
+    stop_loss_pct: Optional[float],
+    atr_value: Optional[float],
+    atr_stop_mult: Optional[float],
+) -> tuple[Optional[float], str]:
+    pct_stop = (
+        entry_price * (1 - stop_loss_pct)
+        if stop_loss_pct is not None else None
+    )
+
+    atr_stop = None
+    if atr_stop_mult is not None and atr_stop_mult > 0 and atr_value is not None and atr_value > 0:
+        atr_stop = entry_price - atr_value * atr_stop_mult
+
+    if pct_stop is None and atr_stop is None:
+        return None, "none"
+    if pct_stop is None:
+        return atr_stop, "atr"
+    if atr_stop is None:
+        return pct_stop, "pct"
+
+    stop_price = max(pct_stop, atr_stop)
+    stop_origin = "atr" if atr_stop >= pct_stop else "pct"
+    return stop_price, stop_origin
+
+def _apply_atr_trailing_stop(
+    position: dict,
+    close_price: float,
+    atr_value: Optional[float],
+    atr_trailing_mult: Optional[float],
+) -> None:
+    if atr_trailing_mult is None or atr_trailing_mult <= 0:
+        return
+    if atr_value is None or atr_value <= 0:
+        return
+
+    peak_close = max(position.get("peak_close", close_price), close_price)
+    candidate_stop = peak_close - atr_value * atr_trailing_mult
+    current_stop = position.get("stop_price")
+
+    if current_stop is None or candidate_stop > current_stop:
+        position["stop_price"] = candidate_stop
+        position["stop_origin"] = "atr_trailing"
+
+    position["peak_close"] = peak_close
+
+def _is_stop_hit(
+    low_price: float,
+    close_price: float,
+    stop_price: Optional[float],
+    stop_origin: str,
+    atr_stop_confirm_on_close: bool,
+) -> bool:
+    if stop_price is None:
+        return False
+
+    if atr_stop_confirm_on_close and stop_origin in ("atr", "atr_trailing"):
+        return close_price <= stop_price
+
+    return low_price <= stop_price
 
 def run_long_backtest(
     times: pd.DatetimeIndex,
@@ -84,11 +147,29 @@ def run_long_backtest(
     position: Optional[dict] = None
 
     breakeven_trigger = config.breakeven_trigger_pct  # None = desactivado
+    use_atr_stop = config.atr_stop_mult is not None and config.atr_stop_mult > 0
+    use_atr_trailing = config.atr_trailing_mult is not None and config.atr_trailing_mult > 0
+
+    atr_values: Optional[np.ndarray] = None
+    if use_atr_stop or use_atr_trailing:
+        high_s = pd.Series(highs)
+        low_s = pd.Series(lows)
+        close_s = pd.Series(closes)
+        atr_series = compute_atr(high_s, low_s, close_s, n=config.atr_period)
+        atr_values = atr_series.bfill().ffill().to_numpy()
 
     for i in range(1, n):
 
         # ── Gestión de posición abierta ──────────────────────────────────
         if position is not None and i >= position["entry_index"]:
+
+            if use_atr_trailing and atr_values is not None and i > position["entry_index"]:
+                _apply_atr_trailing_stop(
+                    position=position,
+                    close_price=closes[i],
+                    atr_value=float(atr_values[i]),
+                    atr_trailing_mult=config.atr_trailing_mult,
+                )
 
             # Breakeven — solo si está configurado y solo desde la vela siguiente
             if (
@@ -99,11 +180,19 @@ def run_long_backtest(
             ):
                 position["stop_price"] = position["entry_price"]
                 position["breakeven_active"] = True
+                position["stop_origin"] = "breakeven"
 
             stop_price        = position.get("stop_price")
             take_profit_price = position.get("take_profit_price")
+            stop_origin       = position.get("stop_origin", "pct")
 
-            stop_hit = stop_price is not None and lows[i] <= stop_price
+            stop_hit = _is_stop_hit(
+                low_price=float(lows[i]),
+                close_price=float(closes[i]),
+                stop_price=stop_price,
+                stop_origin=stop_origin,
+                atr_stop_confirm_on_close=config.atr_stop_confirm_on_close,
+            )
             tp_hit   = take_profit_price is not None and highs[i] >= take_profit_price
 
             # Stop y TP en la misma vela → stop gana (conservador)
@@ -122,11 +211,15 @@ def run_long_backtest(
 
             # Stop Loss
             if stop_hit:
-                stop_reason = (
-                    "breakeven_stop"
-                    if position.get("breakeven_active") and stop_price == position["entry_price"]
-                    else "stop_loss"
-                )
+                if position.get("breakeven_active") and stop_price == position["entry_price"]:
+                    stop_reason = "breakeven_stop"
+                else:
+                    if stop_origin == "atr_trailing":
+                        stop_reason = "atr_trailing_stop"
+                    elif stop_origin == "atr":
+                        stop_reason = "atr_stop_loss"
+                    else:
+                        stop_reason = "stop_loss"
                 trade = _close_long_trade(
                     position=position,
                     exit_index=i,
@@ -174,17 +267,27 @@ def run_long_backtest(
             position_notional = equity * config.leverage
             quantity       = position_notional / entry_price if entry_price > 0 else 0.0
 
+            atr_at_entry = None
+            if atr_values is not None:
+                atr_at_entry = float(atr_values[entry_index])
+
+            stop_price, stop_origin = _resolve_initial_stop_price(
+                entry_price=entry_price,
+                stop_loss_pct=config.stop_loss_pct,
+                atr_value=atr_at_entry,
+                atr_stop_mult=config.atr_stop_mult,
+            )
+
             position = {
                 "entry_index":    entry_index,
                 "entry_time":     times[entry_index].to_pydatetime(),
                 "entry_price":    entry_price,
                 "equity_before":  equity,
                 "quantity":       quantity,
+                "peak_close":     entry_price,
                 "breakeven_active": False,
-                "stop_price": (
-                    entry_price * (1 - config.stop_loss_pct)
-                    if config.stop_loss_pct is not None else None
-                ),
+                "stop_price": stop_price,
+                "stop_origin": stop_origin,
                 "take_profit_price": (
                     entry_price * (1 + config.take_profit_pct)
                     if config.take_profit_pct is not None else None
