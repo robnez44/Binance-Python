@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from backtesting.records import BacktestResult, StrategySignals
+from backtesting.records import BacktestResult, StrategySignals, BacktestConfig
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  Debug de señales — tabla vela a vela
@@ -201,7 +201,7 @@ def _reason_label(reason: str) -> str:
         "take_profit": "✔  take_profit",
         "stop_loss": "✘  stop_loss",
         "atr_stop_loss": "✘  atr_stop",
-        "atr_trailing_stop": "✘  atr_trailing",
+        "atr_trailing_stop": "✘  Trailing SL by ATR",
         "breakeven_stop": "◈  breakeven",
         "stop_loss_priority_same_bar": "✘  sl_same_bar",
         "signal_exit": "↩  signal_exit",
@@ -217,7 +217,7 @@ def print_summary(
     W = 80
     SEP = "─" * W
     SEP2 = "═" * W
-    config = params["config"]
+    config: BacktestConfig = params["config"]
 
     print()
     print(SEP2)
@@ -248,7 +248,7 @@ def print_summary(
     atr_trail_label = f"ATR x{config.atr_trailing_mult:g} (n={config.atr_period})" if config.atr_trailing_mult else "desactivado"
     atr_confirm_label = "cierre de vela" if config.atr_stop_confirm_on_close else "toque intravela"
     print(f"  {'SL dinámico ATR':<28} {atr_stop_label}")
-    print(f"  {'Trailing ATR':<28} {atr_trail_label}")
+    print(f"  {'Trailing SL by ATR':<28} {atr_trail_label}")
     print(f"  {'Confirmación stop ATR':<28} {atr_confirm_label}")
 
     print()
@@ -410,7 +410,7 @@ def print_summary(
             print(f"       Entrada: {t.entry_price:,.2f}   Salida: {t.exit_price:,.2f}")
 
         elif t.exit_reason == "atr_trailing_stop":
-            print("    ✘  Trailing ATR tocado (protección de ganancia)")
+            print("    ✘  Trailing SL by ATR tocado (protección de ganancia)")
             print(f"       Entrada: {t.entry_price:,.2f}   Salida: {t.exit_price:,.2f}")
 
         elif t.exit_reason == "breakeven_stop":

@@ -4,8 +4,106 @@ import numpy as np
 import pandas as pd
 from matplotlib.lines import Line2D
 
-from backtesting.records import BacktestResult, StrategySignals
+from backtesting.records import BacktestConfig, BacktestResult, StrategySignals
 from backtesting.backtest_params import build_pdf_path
+from indicators.atr import compute_atr
+
+
+def _resolve_initial_stop_price(
+    entry_price: float,
+    stop_loss_pct: float | None,
+    atr_value: float | None,
+    atr_stop_mult: float | None,
+) -> tuple[float | None, str]:
+    pct_stop = (
+        entry_price * (1 - stop_loss_pct)
+        if stop_loss_pct is not None else None
+    )
+
+    atr_stop = None
+    if atr_stop_mult is not None and atr_stop_mult > 0 and atr_value is not None and atr_value > 0:
+        atr_stop = entry_price - atr_value * atr_stop_mult
+
+    if pct_stop is None and atr_stop is None:
+        return None, "none"
+    if pct_stop is None:
+        return atr_stop, "atr"
+    if atr_stop is None:
+        return pct_stop, "pct"
+
+    stop_price = max(pct_stop, atr_stop)
+    stop_origin = "atr" if atr_stop >= pct_stop else "pct"
+    return stop_price, stop_origin
+
+
+def _build_dynamic_stop_line(
+    highs: np.ndarray,
+    lows: np.ndarray,
+    closes: np.ndarray,
+    result: BacktestResult,
+    config: BacktestConfig,
+) -> np.ndarray:
+    n = len(closes)
+    stop_line = np.full(n, np.nan, dtype=float)
+
+    use_atr_stop = config.atr_stop_mult is not None and config.atr_stop_mult > 0
+    use_atr_trailing = config.atr_trailing_mult is not None and config.atr_trailing_mult > 0
+    has_any_stop = use_atr_stop or use_atr_trailing or (config.stop_loss_pct is not None)
+    if not has_any_stop:
+        return stop_line
+
+    atr_values: np.ndarray | None = None
+    if use_atr_stop or use_atr_trailing:
+        atr_series = compute_atr(
+            pd.Series(highs),
+            pd.Series(lows),
+            pd.Series(closes),
+            n=config.atr_period,
+        )
+        atr_values = atr_series.bfill().ffill().to_numpy()
+
+    for trade in result.trades:
+        entry_index = int(trade.entry_index)
+        if entry_index < 0 or entry_index >= n:
+            continue
+
+        manage_end = int(trade.exit_index)
+        if trade.exit_reason == "signal_exit" and manage_end > entry_index:
+            # En signal_exit se cierra al open de la vela siguiente; la gestión llega hasta la vela de señal.
+            manage_end -= 1
+        manage_end = min(max(manage_end, entry_index), n - 1)
+
+        atr_at_entry = float(atr_values[entry_index]) if atr_values is not None else None
+        stop_price, _ = _resolve_initial_stop_price(
+            entry_price=float(trade.entry_price),
+            stop_loss_pct=config.stop_loss_pct,
+            atr_value=atr_at_entry,
+            atr_stop_mult=config.atr_stop_mult,
+        )
+
+        peak_close = float(trade.entry_price)
+        breakeven_active = False
+
+        for i in range(entry_index, manage_end + 1):
+            if i > entry_index and use_atr_trailing and atr_values is not None:
+                peak_close = max(peak_close, float(closes[i]))
+                candidate_stop = peak_close - float(atr_values[i]) * float(config.atr_trailing_mult)
+                if stop_price is None or candidate_stop > stop_price:
+                    stop_price = candidate_stop
+
+            if (
+                config.breakeven_trigger_pct is not None
+                and i > entry_index
+                and not breakeven_active
+                and float(highs[i]) >= float(trade.entry_price) * (1 + float(config.breakeven_trigger_pct))
+            ):
+                stop_price = float(trade.entry_price)
+                breakeven_active = True
+
+            if stop_price is not None:
+                stop_line[i] = float(stop_price)
+
+    return stop_line
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  Gráfico limpio: velas + EMAs + marcadores de trades
@@ -37,8 +135,11 @@ def plot_backtest(
     ZONE_WIN = "#a5d6a7"
     ZONE_LOSS = "#ef9a9a"
     ZONE_BE = "#fff9c4"
+    ATR_STOP_C = "#8d6e63"  # marrón suave — stop dinámico ATR
     ADX_C = "#7b1fa2"   # morado — línea ADX
     ADX_MIN_C = "#e53935"   # rojo punteado — umbral mínimo
+    PDI_C = "#66bb6a"   # verde suave — +DI
+    MDI_C = "#ef5350"   # rojo — -DI
 
     fig = plt.figure(figsize=(22, 12 if has_adx else 10))
     gs = gridspec.GridSpec(n_subplots, 1, height_ratios=ratios, hspace=0.06)
@@ -149,6 +250,26 @@ def plot_backtest(
         exit_y = highs[trade.exit_index] + arrow_offset * 0.8
         ax_price.plot(t_exit, exit_y, marker="v", color=exit_c, markersize=10, zorder=6)
 
+    # ── Línea de stop dinámico (ATR/manual) ─────────────────────────────
+    stop_line = _build_dynamic_stop_line(
+        highs=highs,
+        lows=lows,
+        closes=closes,
+        result=result,
+        config=params["config"],
+    )
+    has_stop_line = np.isfinite(stop_line).any()
+    if has_stop_line:
+        ax_price.plot(
+            times,
+            stop_line,
+            color=ATR_STOP_C,
+            linewidth=1.2,
+            linestyle="--",
+            label="Stop dinámico",
+            zorder=5,
+        )
+
     # ── Leyenda ──────────────────────────────────────────────────────────
     legend_handles = [
         Line2D([0], [0], color=EMA_FAST, linewidth=1.6, label="EMA 10"),
@@ -162,6 +283,10 @@ def plot_backtest(
         Line2D([0], [0], marker="v", color=BE_C, linestyle="None",
                markersize=9, label="Breakeven"),
     ]
+    if has_stop_line:
+        legend_handles.append(
+            Line2D([0], [0], color=ATR_STOP_C, linewidth=1.2, linestyle="--", label="Stop dinámico")
+        )
     ax_price.legend(handles=legend_handles, loc="upper left", fontsize=8, framealpha=0.9)
 
     ret_sign = "+" if result.total_return_pct >= 0 else ""
@@ -205,11 +330,17 @@ def plot_backtest(
         plt.setp(ax_equity.get_xticklabels(), visible=False)
         ax_adx.plot(times, signals.adx_values, color=ADX_C,
                     linewidth=1.4, label="ADX", zorder=3)
+        if signals.plus_di is not None:
+            ax_adx.plot(times, signals.plus_di, color=PDI_C,
+                        linewidth=1.2, label="+DI", alpha=0.95, zorder=2)
+        if signals.minus_di is not None:
+            ax_adx.plot(times, signals.minus_di, color=MDI_C,
+                        linewidth=1.2, label="-DI", alpha=0.95, zorder=2)
         if params["adx_min"] > 0:
             ax_adx.axhline(params["adx_min"], color=ADX_MIN_C,
                            linewidth=1.0, linestyle="--", alpha=0.8,
                            label=f"Mín ADX ({params['adx_min']:.0f})")
-        ax_adx.set_ylabel("ADX", fontsize=9)
+        ax_adx.set_ylabel("ADX / DI", fontsize=9)
         ax_adx.set_xlabel("Fecha (UTC)", fontsize=9)
         ax_adx.legend(loc="upper left", fontsize=8, framealpha=0.9)
     else:
