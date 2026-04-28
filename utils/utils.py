@@ -1,7 +1,13 @@
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from decimal import Decimal
-from backtesting.records import Trade, BacktestConfig, BacktestResult
+from backtesting.records import (
+    BacktestAlertEvent,
+    BacktestConfig,
+    BacktestResult,
+    RelevantSignalTimelineRow,
+    Trade,
+)
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  Conversión de timestamps
@@ -50,6 +56,39 @@ def trade_to_dict(trade: Trade) -> Dict[str, Any]:
         "equity_after": trade.equity_after,
     }
 
+def alert_event_to_dict(event: BacktestAlertEvent) -> Dict[str, Any]:
+    """Convierte un BacktestAlertEvent a diccionario para MongoDB."""
+    return {
+        "index": event.index,
+        "timestamp": event.timestamp,
+        "event_type": event.event_type,
+        "action": event.action,
+        "message": event.message,
+        "price": event.price,
+        "trade_number": event.trade_number,
+        "exit_reason": event.exit_reason,
+    }
+
+def relevant_timeline_row_to_dict(row: RelevantSignalTimelineRow) -> Dict[str, Any]:
+    """Convierte una fila de timeline relevante a diccionario para MongoDB."""
+    return {
+        "index": row.index,
+        "timestamp": row.timestamp,
+        "close_price": row.close_price,
+        "ema10": row.ema10,
+        "ema55": row.ema55,
+        "gap_pct": row.gap_pct,
+        "slope_pct": row.slope_pct,
+        "cond_ema10_gt_ema55": row.cond_ema10_gt_ema55,
+        "cond_gap_ge_min": row.cond_gap_ge_min,
+        "cond_slope_ge_min": row.cond_slope_ge_min,
+        "cond_price_gt_ema10": row.cond_price_gt_ema10,
+        "adx": row.adx,
+        "plus_di": row.plus_di,
+        "minus_di": row.minus_di,
+        "event": row.event,
+    }
+
 def config_to_dict(config: BacktestConfig) -> Optional[Dict[str, Any]]:
     """Convierte un BacktestConfig (dataclass) a diccionario para MongoDB."""
     if config is None:
@@ -74,6 +113,9 @@ def config_to_dict(config: BacktestConfig) -> Optional[Dict[str, Any]]:
 
 def backtest_result_to_dict(result: BacktestResult) -> Dict[str, Any]:
     """Convierte un BacktestResult completo a diccionario para MongoDB."""
+    timeline = result.alerts_timeline or result.relevant_signals_timeline
+    alerts_feed_docs = [alert_event_to_dict(e) for e in result.alerts_feed]
+    timeline_docs = [relevant_timeline_row_to_dict(r) for r in timeline]
     return {
         "symbol": result.symbol,
         "interval": result.interval,
@@ -92,6 +134,8 @@ def backtest_result_to_dict(result: BacktestResult) -> Dict[str, Any]:
         "max_drawdown_pct": result.max_drawdown_pct,
         "report_pdf_filename": result.report_pdf_filename,
         "config": config_to_dict(result.config),
+        "alerts_feed": alerts_feed_docs,
+        "alerts_timeline": timeline_docs,
         "trades": [trade_to_dict(t) for t in result.trades],
         "created_at": result.created_at or datetime.now(timezone.utc),
     }
