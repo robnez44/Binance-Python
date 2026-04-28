@@ -3,74 +3,15 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
-from backtesting.records import BacktestConfig, BacktestResult, Trade
+from backtesting.alerts import build_alerts_feed, build_signals_timeline
+from backtesting.records import BacktestConfig, BacktestResult
 from backtesting.strategies import build_ema_long_signals
 from backtesting.simulator import run_long_backtest
 from database.repository import get_candles, save_backtest_result
-from API.schemas.backtest import BacktestRequest, BacktestResponse, BacktestConfigResponse, TradeResponse
+from API.schemas.backtest import BacktestRequest, BacktestResponse
+from API.mappers.backtest import result_to_backtest_response
+from indicators.emas import ema_pct_slope
 from utils.utils import parse_utc
-
-def _trade_to_response(trade: Trade) -> TradeResponse:
-    """Convierte un Trade dataclass al schema de respuesta HTTP."""
-    return TradeResponse(
-        entry_time=trade.entry_time,
-        exit_time=trade.exit_time,
-        side=trade.side,
-        entry_price=trade.entry_price,
-        exit_price=trade.exit_price,
-        quantity=trade.quantity,
-        pnl=trade.pnl,
-        return_pct=trade.return_pct,
-        candles_held=trade.candles_held,
-        exit_reason=trade.exit_reason,
-        equity_before=trade.equity_before,
-        equity_after=trade.equity_after,
-    )
-
-def _config_to_response(config: BacktestConfig) -> BacktestConfigResponse:
-    """Convierte un BacktestConfig dataclass al schema de respuesta HTTP."""
-    return BacktestConfigResponse(
-        initial_capital=config.initial_capital,
-        leverage=config.leverage,
-        stop_loss_pct=config.stop_loss_pct,
-        take_profit_pct=config.take_profit_pct,
-        breakeven_trigger_pct=config.breakeven_trigger_pct,
-        min_slope_pct=config.min_slope_pct,
-        exit_slope_periods=config.exit_slope_periods,
-        ema_gap_min_pct=config.ema_gap_min_pct,
-        adx_min=config.adx_min,
-        adx_require_di=config.adx_require_di,
-        adx_require_rising=config.adx_require_rising,
-        atr_period=config.atr_period,
-        atr_stop_mult=config.atr_stop_mult,
-        atr_trailing_mult=config.atr_trailing_mult,
-        atr_stop_confirm_on_close=config.atr_stop_confirm_on_close,
-    )
-
-def _result_to_response(result: BacktestResult, backtest_id: str) -> BacktestResponse:
-    """Convierte un BacktestResult dataclass al schema de respuesta HTTP."""
-    return BacktestResponse(
-        id=backtest_id,
-        symbol=result.symbol,
-        interval=result.interval,
-        strategy_name=result.strategy_name,
-        start_time=result.start_time,
-        end_time=result.end_time,
-        created_at=result.created_at,
-        initial_capital=result.initial_capital,
-        final_capital=result.final_capital,
-        total_return_pct=result.total_return_pct,
-        max_drawdown_pct=result.max_drawdown_pct,
-        total_trades=result.total_trades,
-        winning_trades=result.winning_trades,
-        losing_trades=result.losing_trades,
-        win_rate_pct=result.win_rate_pct,
-        # profit_factor puede ser inf si no hubo perdidas, se acota para respuesta
-        profit_factor=min(result.profit_factor, 999.0),
-        avg_trade_return_pct=result.avg_trade_return_pct,
-        trades=[_trade_to_response(t) for t in result.trades],
-        config=_config_to_response(result.config) if result.config else None,
-    )
 
 async def execute_backtest(req: BacktestRequest) -> Optional[BacktestResponse]:
     """
@@ -155,8 +96,25 @@ async def execute_backtest(req: BacktestRequest) -> Optional[BacktestResponse]:
         interval=req.interval,
     )
 
+    slope_pct = ema_pct_slope(signals.ema_fast)
+    result.alerts_feed = build_alerts_feed(
+        times=times,
+        closes=closes,
+        signals=signals,
+        result=result,
+    )
+    result.signals_timeline = build_signals_timeline(
+        times=times,
+        closes=closes,
+        signals=signals,
+        slope_pct=slope_pct,
+        result=result,
+        min_slope_pct=req.min_slope_pct,
+        ema_gap_min_pct=req.ema_gap_min_pct,
+    )
+
     # Guardar en MongoDB
     backtest_id: str = await save_backtest_result(result)
 
     # Convertir a schema de respuesta
-    return _result_to_response(result, backtest_id)
+    return result_to_backtest_response(result, backtest_id)

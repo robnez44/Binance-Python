@@ -1,8 +1,6 @@
 from __future__ import annotations
-
 from datetime import datetime
 from typing import List, Optional
-
 from pydantic import BaseModel, Field
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -51,9 +49,16 @@ class BacktestRequest(BaseModel):
                 "end_time": "2026-03-01",
                 "initial_capital": 10000,
                 "leverage": 1,
+                "stop_loss_pct": None,
+                "take_profit_pct": None,
+                "breakeven_trigger_pct": None,
                 "min_slope_pct": 0.08,
                 "exit_slope_periods": 2,
+                "ema_gap_min_pct": 0.0,
                 "adx_min": 23,
+                "adx_require_di": True,
+                "adx_require_rising": False,
+                "atr_period": 14,
                 "atr_stop_mult": 1.8,
                 "atr_trailing_mult": 2.2,
             }
@@ -96,6 +101,35 @@ class BacktestConfigResponse(BaseModel):
     atr_trailing_mult:       Optional[float]
     atr_stop_confirm_on_close: bool
 
+class BacktestAlertResponse(BaseModel):
+    """Evento de alerta estilo bot (senal o ejecucion)."""
+    index: int
+    timestamp: datetime
+    event_type: str
+    action: str
+    message: str
+    price: float
+    trade_number: Optional[int] = None
+    exit_reason: Optional[str] = None
+
+class BacktestSignalTimelineRowResponse(BaseModel):
+    """Fila de timeline de velas relevantes para tabla de debug."""
+    index: int
+    timestamp: datetime
+    close_price: float
+    ema10: float
+    ema55: float
+    gap_pct: float
+    slope_pct: float
+    cond_ema10_gt_ema55: bool
+    cond_gap_ge_min: bool
+    cond_slope_ge_min: bool
+    cond_price_gt_ema10: bool
+    adx: Optional[float] = None
+    plus_di: Optional[float] = None
+    minus_di: Optional[float] = None
+    event: Optional[str] = None
+
 class BacktestResponse(BaseModel):
     """
     Respuesta completa de un backtest.
@@ -129,3 +163,5 @@ class BacktestResponse(BaseModel):
     # Detalle completo
     trades: List[TradeResponse]
     config: Optional[BacktestConfigResponse]
+    alerts_feed: List[BacktestAlertResponse] = Field(default_factory=list)
+    signals_timeline: List[BacktestSignalTimelineRowResponse] = Field(default_factory=list)
