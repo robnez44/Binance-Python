@@ -1,8 +1,11 @@
 from __future__ import annotations
 from typing import Any, Dict, List
+import os
 import requests
+from dotenv import load_dotenv
 
-BASE_URL = "https://api.binance.com/api/v3/"
+load_dotenv()
+BASE_URL = os.getenv("BINANCE_API")
 KLINES_MAX_LIMIT = 1000
 KLINES_DEFAULT_LIMIT = 1000
 
