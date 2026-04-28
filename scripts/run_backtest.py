@@ -70,9 +70,6 @@ async def main() -> None:
 
         slope_pct = ema_pct_slope(signals.ema_fast)
 
-        # Alertas de la última vela (simulación bot en tiempo real)
-        check_alerts(times, closes, signals, slope_pct, params)
-
         print("  Ejecutando backtest...")
         result = run_long_backtest(
             times=times,
@@ -87,6 +84,9 @@ async def main() -> None:
             symbol=params["symbol"],
             interval=params["interval"],
         )
+
+        # Alertas estilo bot basadas en ejecuciones reales.
+        check_alerts(times, closes, signals, slope_pct, params, result)
 
         trade_contexts = build_trade_context(
             result=result,
@@ -113,10 +113,11 @@ async def main() -> None:
         )
 
         print_summary(result, params, trade_contexts)
-        plot_backtest(times, opens, highs, lows, closes, signals, result, params)
-
+        # Guardar resultado antes de mostrar el gráfico para evitar bloqueo
         backtest_id = await save_backtest_result(result)
         print(f"  Guardado en MongoDB  [_id: {backtest_id}]")
+
+        plot_backtest(times, opens, highs, lows, closes, signals, result, params)
         if result.report_pdf_filename:
             print(f"  PDF en registro MongoDB: {result.report_pdf_filename}")
         print()

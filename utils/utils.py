@@ -5,14 +5,13 @@ from backtesting.records import (
     BacktestAlertEvent,
     BacktestConfig,
     BacktestResult,
-    RelevantSignalTimelineRow,
+    SignalTimelineRow,
     Trade,
 )
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  Conversión de timestamps
-# ══════════════════════════════════════════════════════════════════════════════
-
+# ══════════════════════════════════════════════════════════════════════════════    
 def timestamp_to_utc(timestamp_ms: int) -> datetime:
     """Convierte un timestamp en milisegundos a datetime UTC."""
     return datetime.fromtimestamp(timestamp_ms / 1000, tz=timezone.utc)
@@ -20,7 +19,6 @@ def timestamp_to_utc(timestamp_ms: int) -> datetime:
 # ══════════════════════════════════════════════════════════════════════════════
 #  Conversores a dict (para guardar en MongoDB)
 # ══════════════════════════════════════════════════════════════════════════════
-
 def candles_to_dict(kline: List[Any]) -> Dict[str, Any]:
     """Convierte una kline cruda de Binance (lista) a diccionario tipado."""
     return {
@@ -69,8 +67,8 @@ def alert_event_to_dict(event: BacktestAlertEvent) -> Dict[str, Any]:
         "exit_reason": event.exit_reason,
     }
 
-def relevant_timeline_row_to_dict(row: RelevantSignalTimelineRow) -> Dict[str, Any]:
-    """Convierte una fila de timeline relevante a diccionario para MongoDB."""
+def signal_timeline_row_to_dict(row: SignalTimelineRow) -> Dict[str, Any]:
+    """Convierte una fila de timeline de señales a diccionario para MongoDB."""
     return {
         "index": row.index,
         "timestamp": row.timestamp,
@@ -113,9 +111,9 @@ def config_to_dict(config: BacktestConfig) -> Optional[Dict[str, Any]]:
 
 def backtest_result_to_dict(result: BacktestResult) -> Dict[str, Any]:
     """Convierte un BacktestResult completo a diccionario para MongoDB."""
-    timeline = result.alerts_timeline or result.relevant_signals_timeline
+    timeline = result.signals_timeline
     alerts_feed_docs = [alert_event_to_dict(e) for e in result.alerts_feed]
-    timeline_docs = [relevant_timeline_row_to_dict(r) for r in timeline]
+    timeline_docs = [signal_timeline_row_to_dict(r) for r in timeline]
     return {
         "symbol": result.symbol,
         "interval": result.interval,
@@ -135,7 +133,7 @@ def backtest_result_to_dict(result: BacktestResult) -> Dict[str, Any]:
         "report_pdf_filename": result.report_pdf_filename,
         "config": config_to_dict(result.config),
         "alerts_feed": alerts_feed_docs,
-        "alerts_timeline": timeline_docs,
+        "signals_timeline": timeline_docs,
         "trades": [trade_to_dict(t) for t in result.trades],
         "created_at": result.created_at or datetime.now(timezone.utc),
     }

@@ -53,6 +53,38 @@ class Trade:
     exit_reason:    str         # Por que salio: stop loss, take profit, señal de salida o fin de datos
     equity_before:  float       # Capital que se tenía antes de este trade
     equity_after:   float       # Capital que se tiene después de este trade (equity_before + pnl)
+
+@dataclass
+class BacktestAlertEvent:
+    """Evento de alerta estilo bot (senal o ejecucion)."""
+    index: int
+    timestamp: datetime
+    event_type: str
+    action: str
+    message: str
+    price: float
+    trade_number: Optional[int] = None
+    exit_reason: Optional[str] = None
+
+@dataclass
+class SignalTimelineRow:
+    """Fila de timeline de velas relevantes para tabla de debug."""
+    index: int
+    timestamp: datetime
+    close_price: float
+    ema10: float
+    ema55: float
+    gap_pct: float
+    slope_pct: float
+    cond_ema10_gt_ema55: bool
+    cond_gap_ge_min: bool
+    cond_slope_ge_min: bool
+    cond_price_gt_ema10: bool
+    adx: Optional[float] = None
+    plus_di: Optional[float] = None
+    minus_di: Optional[float] = None
+    event: Optional[str] = None
+
 @dataclass
 class StrategySignals:
     """
@@ -97,4 +129,6 @@ class BacktestResult:
     strategy_name:          str = ""                                    # Nombre de la estrategia (ej: "ema_cross_long", "adx_smi_strategy", etc.)
     report_pdf_filename:    Optional[str] = None                        # Nombre del PDF generado con el gráfico del backtest
     config:                 Optional[BacktestConfig] = None             # Configuracion usada (para reproducibilidad)
+    alerts_feed:            List[BacktestAlertEvent] = field(default_factory=list)  # Alertas estilo bot (eventos relevantes)
+    signals_timeline:       List[SignalTimelineRow] = field(default_factory=list)  # Filas de velas relevantes para tabla debug
     created_at:             Optional[datetime] = None                   # Fecha en que se corrio el backtest
