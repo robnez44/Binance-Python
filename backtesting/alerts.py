@@ -8,19 +8,7 @@ from backtesting.records import (
     SignalTimelineRow,
     StrategySignals,
 )
-
-def _exit_reason_label(reason: str) -> str:
-    labels = {
-        "take_profit": "take profit",
-        "stop_loss": "stop loss",
-        "atr_stop_loss": "atr stop",
-        "atr_trailing_stop": "trailing sl by atr",
-        "breakeven_stop": "breakeven",
-        "stop_loss_priority_same_bar": "stop loss (same bar)",
-        "signal_exit": "signal exit",
-        "end_of_data": "end of data",
-    }
-    return labels.get(reason, reason)
+from backtesting.reporting_utils import exit_reason_label
 
 def build_alerts_feed(
     times: pd.DatetimeIndex,
@@ -91,7 +79,7 @@ def build_alerts_feed(
                     timestamp=times[trade.exit_index].to_pydatetime(),
                     event_type="exit_exec",
                     action="SELL_EXECUTED",
-                    message=f"Salida ejecutada ({_exit_reason_label(trade.exit_reason)}).",
+                    message=f"Salida ejecutada ({exit_reason_label(trade.exit_reason, style='plain')}).",
                     price=float(trade.exit_price),
                     trade_number=trade_number,
                     exit_reason=trade.exit_reason,
@@ -112,7 +100,6 @@ def build_alerts_feed(
         )
     )
     return events
-
 
 def build_signals_timeline(
     times: pd.DatetimeIndex,
@@ -212,57 +199,3 @@ def build_signals_timeline(
         )
 
     return rows
-
-def check_alerts(
-    times: pd.DatetimeIndex,
-    closes: np.ndarray,
-    signals: StrategySignals,
-    slope_pct: np.ndarray,
-    params: dict,
-    result: BacktestResult,
-) -> None:
-    """Renderiza alertas estilo bot en consola usando ejecuciones reales."""
-    # Construir artefactos de observabilidad y guardarlos en el resultado
-    feed = build_alerts_feed(times, closes, signals, result)
-    signals_timeline = build_signals_timeline(
-        times=times,
-        closes=closes,
-        signals=signals,
-        slope_pct=slope_pct,
-        result=result,
-        min_slope_pct=params.get("min_slope_pct", 0.0),
-        ema_gap_min_pct=params.get("ema_gap_min_pct", 0.0),
-    )
-
-    # Asignar al objeto BacktestResult para que se persistan como en la API
-    result.alerts_feed = feed
-    result.signals_timeline = signals_timeline
-    # slope_pct ya no se descarta
-    W = 72
-
-    print()
-    print("═" * W)
-    print(f"  ALERTAS BOT  ·  {params['symbol']}  ·  {params['interval']}")
-    print("═" * W)
-
-    if not feed:
-        print("  ·  No hubo alertas relevantes en este rango")
-        print("═" * W)
-        print()
-        return
-
-    for ev in feed:
-        t = ev.timestamp.strftime("%Y-%m-%d %H:%M UTC")
-        trade_no = ev.trade_number
-        trade_txt = f"  [trade #{trade_no}]" if trade_no else ""
-        print(
-            f"  {t}  idx={ev.index:>5}  "
-            f"{ev.event_type:>12}  "
-            f"{ev.message}  "
-            f"price={ev.price:,.2f}{trade_txt}"
-        )
-
-    print()
-    print(f"  Total alertas: {len(feed)}")
-    print("═" * W)
-    print()

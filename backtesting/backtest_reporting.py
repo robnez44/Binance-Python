@@ -1,7 +1,8 @@
 import numpy as np
 import pandas as pd
 
-from backtesting.records import BacktestResult, StrategySignals, BacktestConfig
+from backtesting.records import BacktestAlertEvent, BacktestResult, StrategySignals, BacktestConfig
+from backtesting.reporting_utils import exit_reason_label
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  Debug de señales — tabla vela a vela
@@ -194,20 +195,44 @@ def build_trade_context(
     return contexts
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  Print resumen en terminal
+#  Alertas estilo bot — print-only
 # ══════════════════════════════════════════════════════════════════════════════
-def _reason_label(reason: str) -> str:
-    labels = {
-        "take_profit": "✔  take_profit",
-        "stop_loss": "✘  stop_loss",
-        "atr_stop_loss": "✘  atr_stop",
-        "atr_trailing_stop": "✘  Trailing SL by ATR",
-        "breakeven_stop": "◈  breakeven",
-        "stop_loss_priority_same_bar": "✘  sl_same_bar",
-        "signal_exit": "↩  signal_exit",
-        "end_of_data": "⏹  end_of_data",
-    }
-    return labels.get(reason, reason)
+def check_alerts(
+    feed: list[BacktestAlertEvent],
+    params: dict,
+) -> None:
+    """Renderiza `alerts_feed` en consola.
+
+    Importante: esta función NO construye artefactos ni muta `BacktestResult`.
+    """
+    W = 72
+
+    print()
+    print("═" * W)
+    print(f"  ALERTAS BOT  ·  {params['symbol']}  ·  {params['interval']}")
+    print("═" * W)
+
+    if not feed:
+        print("  ·  No hubo alertas relevantes en este rango")
+        print("═" * W)
+        print()
+        return
+
+    for ev in feed:
+        t = ev.timestamp.strftime("%Y-%m-%d %H:%M UTC")
+        trade_no = ev.trade_number
+        trade_txt = f"  [trade #{trade_no}]" if trade_no else ""
+        print(
+            f"  {t}  idx={ev.index:>5}  "
+            f"{ev.event_type:>12}  "
+            f"{ev.message}  "
+            f"price={ev.price:,.2f}{trade_txt}"
+        )
+
+    print()
+    print(f"  Total alertas: {len(feed)}")
+    print("═" * W)
+    print()
 
 def print_summary(
     result: BacktestResult,
@@ -296,7 +321,7 @@ def print_summary(
         pnl_sign = "+" if t.pnl >= 0 else ""
         ret_sign2 = "+" if t.return_pct >= 0 else ""
 
-        print(f"  Trade #{idx}  {_reason_label(t.exit_reason)}")
+        print(f"  Trade #{idx}  {exit_reason_label(t.exit_reason, style='icon')}")
         print(f"  {'─' * (W - 2)}")
         print(
             f"  Entrada: {t.entry_time.strftime('%Y-%m-%d %H:%M')}   "
@@ -371,7 +396,7 @@ def print_summary(
         # ── Condiciones de SALIDA ─────────────────────────────────────────
         print()
         xi = ctx["signal_index_exit"]
-        print(f"  SALIDA — {_reason_label(t.exit_reason)}")
+        print(f"  SALIDA — {exit_reason_label(t.exit_reason, style='icon')}")
 
         if t.exit_reason == "signal_exit":
             print(f"  (vela de señal #{xi} → ejecución al open de vela #{t.exit_index})")

@@ -18,14 +18,6 @@ class BacktestConfig:
     exit_slope_periods:     int = 2                 # Velas consecutivas con pendiente negativa para confirmar salida
     ema_gap_min_pct:        float = 0.0             # Separación mínima EMA10-EMA55 en % para validar cruces (0.0 = desactivado)
     adx_min:                float          = 0.0
-    # ADX mínimo para confirmar tendencia en la entrada.
-    # 0.0 = desactivado (sin filtro ADX).
-    # 23.0 = solo entrar cuando ADX >= 23 (tendencia confirmada).
-    # Niveles de referencia:
-    #   < 20  → mercado lateral / sin tendencia
-    #   20-25 → tendencia débil emergente
-    #   >= 25 → tendencia fuerte
-    #   >= 40 → tendencia muy fuerte (posible sobreextensión)
     adx_require_di:         bool = True             # Si True, exige +DI > -DI para validar entrada con ADX
     adx_require_rising:     bool = False            # Si True, exige ADX no decreciente (más estricto)
     atr_period:             int = 14                # Periodo ATR para stops dinámicos

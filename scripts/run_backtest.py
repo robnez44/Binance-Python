@@ -4,10 +4,10 @@ import pandas as pd
 
 from backtesting.simulator import run_long_backtest
 from backtesting.strategies import build_ema_long_signals
-from backtesting.alerts import check_alerts
+from backtesting.alerts import build_alerts_feed, build_signals_timeline
 from backtesting.backtest_params import ask_backtest_params
 from backtesting.backtest_plot import plot_backtest
-from backtesting.backtest_reporting import build_trade_context, debug_signals, print_summary
+from backtesting.backtest_reporting import build_trade_context, check_alerts, debug_signals, print_summary
 from database.database import connectDB, disconnect
 from database.repository import get_candles, save_backtest_result
 from indicators.emas import ema_pct_slope
@@ -85,8 +85,20 @@ async def main() -> None:
             interval=params["interval"],
         )
 
-        # Alertas estilo bot basadas en ejecuciones reales.
-        check_alerts(times, closes, signals, slope_pct, params, result)
+        # Construir artefactos de observabilidad (persistidos en MongoDB)
+        result.alerts_feed = build_alerts_feed(times, closes, signals, result)
+        result.signals_timeline = build_signals_timeline(
+            times=times,
+            closes=closes,
+            signals=signals,
+            slope_pct=slope_pct,
+            result=result,
+            min_slope_pct=params.get("min_slope_pct", 0.0),
+            ema_gap_min_pct=params.get("ema_gap_min_pct", 0.0),
+        )
+
+        # Print-only
+        check_alerts(feed=result.alerts_feed, params=params)
 
         trade_contexts = build_trade_context(
             result=result,
