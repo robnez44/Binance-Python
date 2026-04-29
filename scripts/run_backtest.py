@@ -125,11 +125,11 @@ async def main() -> None:
         )
 
         print_summary(result, params, trade_contexts)
-        # Guardar resultado antes de mostrar el gráfico para evitar bloqueo
+        plot_backtest(times, opens, highs, lows, closes, signals, result, params)
+
+        # Guardar una sola vez, ya con el nombre de PDF resuelto.
         backtest_id = await save_backtest_result(result)
         print(f"  Guardado en MongoDB  [_id: {backtest_id}]")
-
-        plot_backtest(times, opens, highs, lows, closes, signals, result, params)
         if result.report_pdf_filename:
             print(f"  PDF en registro MongoDB: {result.report_pdf_filename}")
         print()

@@ -1,6 +1,7 @@
 from dataclasses import asdict
 from datetime import datetime, timezone
 from typing import List, Dict, Optional
+from bson import ObjectId
 from pymongo import UpdateOne
 from database.database import get_db
 from database.schemas import (
