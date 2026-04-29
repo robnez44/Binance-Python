@@ -102,6 +102,7 @@ async def execute_backtest(req: BacktestRequest) -> Optional[BacktestResponse]:
         closes=closes,
         signals=signals,
         result=result,
+        slope_pct=slope_pct,
     )
     result.signals_timeline = build_signals_timeline(
         times=times,

@@ -10,11 +10,80 @@ from backtesting.records import (
 )
 from backtesting.reporting_utils import exit_reason_label
 
+def _format_alert_message(
+    event_type: str,
+    trade_number: int,
+    price: float,
+    ema10: float | None = None,
+    ema55: float | None = None,
+    slope: float | None = None,
+    adx: float | None = None,
+    plus_di: float | None = None,
+    minus_di: float | None = None,
+    base_signal: bool | None = None,
+    filter_total: int | None = None,
+    filter_pass: int | None = None,
+    active_filters: list[str] | None = None,
+    exit_reason: str | None = None,
+    pnl: float | None = None,
+) -> str:
+    """Genera un mensaje descriptivo y natural para la alerta."""
+    if event_type == "entry_signal":
+        parts: list[str] = []
+        # EMA gap
+        if ema10 is not None and ema55 is not None:
+            gap = ((ema10 - ema55) / ema55 * 100) if ema55 else 0
+            parts.append(f"EMA10>EMA55 (gap {gap:+.2f}%)")
+
+        # Base signal (pre-filtros)
+        if base_signal is not None:
+            parts.append("Base: EMA cross" if base_signal else "Base: no")
+
+        # Momentum / slope
+        if slope is not None:
+            parts.append(f"Momentum: {slope:+.4f}%")
+
+        # ADX info
+        if adx is not None:
+            di_desc = ""
+            if plus_di is not None and minus_di is not None:
+                di_desc = ", +DI>-DI" if plus_di > minus_di else ", +DI<=-DI"
+            parts.append(f"ADX {adx:.1f}{di_desc}")
+
+        # Precio relativo
+        if ema10 is not None:
+            parts.append("Precio > EMA10" if price > ema10 else "Precio <= EMA10")
+
+        # Filtros
+        if filter_total is not None and filter_pass is not None:
+            parts.append(f"Filtros: {filter_pass}/{filter_total} pasaron")
+        elif active_filters:
+            parts.append(f"Filtros: {', '.join(active_filters[:3])}")
+
+        details = " • ".join(parts) if parts else "detalle no disponible"
+        return f"📈 Oportunidad detectada — {details}."
+    
+    elif event_type == "entry_exec":
+        return f"🟢 Entrada ejecutada — Compra en ${price:,.2f} — Iniciando posición #{trade_number}"
+    
+    elif event_type == "exit_signal":
+        return f"📉 Señal de cierre: EMA10 comenzó a bajar sostenidamente."
+    
+    elif event_type == "exit_exec":
+        reason_desc = exit_reason_label(exit_reason or "unknown", style="plain")
+        pnl_emoji = "✅" if pnl and pnl >= 0 else "❌"
+        pnl_str = f"${pnl:,.2f}" if pnl is not None else "?"
+        return f"🔴 Posición cerrada — Salida en ${price:,.2f} ({reason_desc}) • PnL: {pnl_emoji} {pnl_str}"
+    
+    return ""
+
+
 def build_alerts_feed(
     times: pd.DatetimeIndex,
     closes: np.ndarray,
     signals: StrategySignals,
     result: BacktestResult,
+    slope_pct: np.ndarray | None = None,
 ) -> list[BacktestAlertEvent]:
     """Construye alertas estilo bot con eventos relevantes y ejecuciones reales."""
     n = len(closes)
@@ -26,13 +95,62 @@ def build_alerts_feed(
             0 <= entry_signal_index < n
             and bool(signals.entry_long[entry_signal_index])
         ):
+            ema10_signal = float(signals.ema_fast[entry_signal_index])
+            ema55_signal = float(signals.ema_slow[entry_signal_index])
+            adx_val = (
+                float(signals.adx_values[entry_signal_index])
+                if signals.adx_values is not None
+                else None
+            )
+            plus_di_val = (
+                float(signals.plus_di[entry_signal_index])
+                if signals.plus_di is not None
+                else None
+            )
+            minus_di_val = (
+                float(signals.minus_di[entry_signal_index])
+                if signals.minus_di is not None
+                else None
+            )
+            base_sig = (
+                bool(signals.entry_base_long[entry_signal_index])
+                if signals.entry_base_long is not None
+                else None
+            )
+            filt_total = (
+                int(signals.filter_total_count[entry_signal_index])
+                if signals.filter_total_count is not None
+                else None
+            )
+            filt_pass = (
+                int(signals.filter_pass_count[entry_signal_index])
+                if signals.filter_pass_count is not None
+                else None
+            )
+            slope_val = (
+                float(slope_pct[entry_signal_index]) if slope_pct is not None else None
+            )
             events.append(
                 BacktestAlertEvent(
                     index=int(entry_signal_index),
                     timestamp=times[entry_signal_index].to_pydatetime(),
                     event_type="entry_signal",
                     action="BUY_NEXT_OPEN",
-                    message="Senal de entrada detectada.",
+                    message=_format_alert_message(
+                        "entry_signal",
+                        trade_number,
+                        float(closes[entry_signal_index]),
+                        ema10=ema10_signal,
+                        ema55=ema55_signal,
+                        slope=slope_val,
+                        adx=adx_val,
+                        plus_di=plus_di_val,
+                        minus_di=minus_di_val,
+                        base_signal=base_sig,
+                        filter_total=filt_total,
+                        filter_pass=filt_pass,
+                        active_filters=signals.active_filters,
+                    ),
                     price=float(closes[entry_signal_index]),
                     trade_number=trade_number,
                     exit_reason=None,
@@ -46,7 +164,11 @@ def build_alerts_feed(
                     timestamp=times[trade.entry_index].to_pydatetime(),
                     event_type="entry_exec",
                     action="BUY_EXECUTED",
-                    message="Entrada ejecutada.",
+                    message=_format_alert_message(
+                        "entry_exec",
+                        trade_number,
+                        float(trade.entry_price),
+                    ),
                     price=float(trade.entry_price),
                     trade_number=trade_number,
                     exit_reason=None,
@@ -65,7 +187,11 @@ def build_alerts_feed(
                         timestamp=times[exit_signal_index].to_pydatetime(),
                         event_type="exit_signal",
                         action="SELL_NEXT_OPEN",
-                        message="Senal de salida detectada.",
+                        message=_format_alert_message(
+                            "exit_signal",
+                            trade_number,
+                            float(closes[exit_signal_index]),
+                        ),
                         price=float(closes[exit_signal_index]),
                         trade_number=trade_number,
                         exit_reason="signal_exit",
@@ -79,7 +205,13 @@ def build_alerts_feed(
                     timestamp=times[trade.exit_index].to_pydatetime(),
                     event_type="exit_exec",
                     action="SELL_EXECUTED",
-                    message=f"Salida ejecutada ({exit_reason_label(trade.exit_reason, style='plain')}).",
+                    message=_format_alert_message(
+                        "exit_exec",
+                        trade_number,
+                        float(trade.exit_price),
+                        exit_reason=trade.exit_reason,
+                        pnl=float(trade.pnl),
+                    ),
                     price=float(trade.exit_price),
                     trade_number=trade_number,
                     exit_reason=trade.exit_reason,

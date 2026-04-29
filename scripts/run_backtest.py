@@ -86,7 +86,7 @@ async def main() -> None:
         )
 
         # Construir artefactos de observabilidad (persistidos en MongoDB)
-        result.alerts_feed = build_alerts_feed(times, closes, signals, result)
+        result.alerts_feed = build_alerts_feed(times, closes, signals, result, slope_pct=slope_pct)
         result.signals_timeline = build_signals_timeline(
             times=times,
             closes=closes,
