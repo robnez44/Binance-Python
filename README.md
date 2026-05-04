@@ -1,18 +1,67 @@
 # Crypto Analysis
 
+Plataforma de analisis tecnico y backtesting para crypto con dos modos principales:
+
+- Flujo CLI interactivo para analisis y ejecucion manual.
+- API FastAPI para correr backtests por HTTP y consultar historico.
+
+El proyecto descarga velas de Binance, calcula indicadores (EMA, ADX, SMI, S/R), persiste en MongoDB y ejecuta un simulador long con observabilidad completa (`alerts_feed` + `signals_timeline`).
+
+## Tabla de contenidos
+
+- [Arquitectura](#arquitectura)
+- [Requisitos](#requisitos)
+- [Configuracion](#configuracion)
+- [Instalacion](#instalacion)
+- [Quickstart](#quickstart)
+- [Uso por CLI](#uso-por-cli)
+- [Uso por API](#uso-por-api)
+- [Colecciones MongoDB](#colecciones-mongodb)
+- [Parametros de estrategia](#parametros-de-estrategia)
+- [Troubleshooting](#troubleshooting)
+- [Estructura del proyecto](#estructura-del-proyecto)
+
+## Arquitectura
+
+1. Ingestion:
+    `scripts/save_analysis` llama a Binance (`services/binance.py`) y construye candles + indicadores.
+2. Persistencia:
+    Se guardan candles e indicadores por coleccion en MongoDB.
+3. Backtest:
+    `scripts/run_backtest` (CLI) o `POST /api/backtests/run` (API) leen candles desde Mongo, generan senales y ejecutan simulacion.
+4. Observabilidad:
+    Se construyen y persisten `alerts_feed` y `signals_timeline` junto con el resultado.
+5. Reporte:
+    En CLI se genera PDF del grafico y el nombre queda persistido en `report_pdf_filename`.
+
 ## Requisitos
 
 - Python 3.10+
+- MongoDB accesible desde la maquina de ejecucion
+- Dependencias del proyecto instaladas
 
-## Instalación
+## Configuracion
+
+Crear un archivo `.env` en la raiz del proyecto con:
+
+```env
+MONGO_URI=mongodb://localhost:27017
+BINANCE_API=https://api.binance.com/api/v3/
+BACKTEST_PDF_DIR=reports/backtests
+```
+
+Notas:
+
+- `MONGO_URI` es obligatorio para scripts y API.
+- `BINANCE_API` debe terminar en `/api/v3/`.
+- `BACKTEST_PDF_DIR` es opcional (default: `reports/backtests`).
+
+## Instalacion
 
 ```bash
 # Clonar el repositorio
 
-# Crear entorno virtual
-python -m venv venv
-
-# Desde la raíz del proyecto
+# Desde la raíz del proyecto, crear entorno virtual
 python3 -m venv venv
 
 # Activarlo
@@ -25,118 +74,127 @@ pip install -r requirements.txt
 pip install -e .
 ```
 
-## Qué hace el proyecto
+## Quickstart
 
-- Descarga velas OHLCV desde Binance
-- Calcula EMAs de 10, 55 y 200 periodos
-- Calcula ADX
-- Calcula SMI / Squeeze Momentum
-- Detecta tendencias por segmentos
-- Detecta soportes y resistencias por fractales con tolerancia basada en ATR
-- Cuenta cuántas velas tocan cada nivel S/R para medir su fuerza
-- Ejecuta backtesting long (EMA 10/55)
-- Guarda velas, indicadores y análisis completos en MongoDB
-- Guarda resultados de backtesting (trades + métricas) en MongoDB
-- Genera gráficos combinados y gráficos específicos de soportes/resistencias
-
-## Estructura actual del proyecto
-
-```
-crypto_analysis/
-├── backtesting/
-│   ├── metrics.py            # Métricas: retorno, win rate, profit factor, max drawdown
-│   ├── records.py            # Dataclasses: BacktestConfig, Trade, StrategySignals, BacktestResult
-│   ├── simulator.py          # Motor de simulación (ejecución al open siguiente)
-│   └── strategies.py         # Estrategia EMA 10/55
-├── dashboard/
-│   ├── chart_full.py         # Gráfico completo: velas + EMAs + S/R + tendencias + SMI + ADX
-│   ├── chart_sr.py           # Gráfico standalone de velas + soportes/resistencias
-│   └── dashboard.py          # Vista combinada original (tendencias + EMAs + pendientes)
-├── database/
-│   ├── __init__.py
-│   ├── database.py           # Conexión a MongoDB
-│   ├── repository.py         # Persistencia, índices y upserts
-│   └── schemas.py            # Dataclasses: Candle, trends, EMA, ADX, SMI, SR, AnalysisRecord
-├── indicators/
-│   ├── adx.py                # Cálculo de ADX y snapshots
-│   ├── emas.py               # Cálculo de EMAs y snapshots
-│   ├── levels.py             # Detección de soportes y resistencias con ATR y conteo de toques
-│   ├── prices.py             # Descarga y gráfico simple de precios
-│   └── smi.py                # Cálculo de Squeeze Momentum Indicator (SMI)
-├── scripts/
-│   ├── classify_trends.py    # Detección y visualización de tendencias
-│   ├── run_backtest.py       # Backtesting long + resumen + gráfico + guardado en MongoDB
-│   └── save_analysis.py      # Pipeline completo + guardado en MongoDB
-├── services/
-│   └── binance.py            # Cliente de Binance
-├── utils/
-│   ├── __init__.py
-│   └── utils.py              # Conversión de datos y utilidades de fechas/parámetros
-├── pyproject.toml
-├── requirements.txt
-└── README.md
-```
-
-## Cómo ejecutar
-
-Activa el entorno virtual antes de correr cualquier módulo:
+1. Cargar candles + indicadores en MongoDB.
+2. Correr backtest (CLI o API).
 
 ```bash
 source venv/bin/activate
-```
-
-### Gráficos y análisis
-
-```bash
-# Detección y gráfico de tendencias
-python -m scripts.classify_trends
-
-# Dashboard original: tendencias + EMAs + pendientes
-python -m dashboard.dashboard
-
-# Gráfico completo: velas + EMAs + S/R + tendencias + SMI + ADX
-python -m dashboard.chart_full
-
-# Gráfico velas + soportes/resistencias
-python -m dashboard.chart_sr
-```
-
-### Pipeline de guardado
-
-```bash
-# Descarga velas, calcula tendencias, EMAs, ADX, SMI, S/R
-# y guarda todo en MongoDB
 python -m scripts.save_analysis
-```
-
-### Backtesting
-
-```bash
-# Ejecuta backtesting long (EMA 10/55), imprime resumen detallado,
-# grafica trades/equity y guarda el resultado en MongoDB
 python -m scripts.run_backtest
 ```
 
-Notas de uso para backtesting:
-
-- `scripts.run_backtest` lee velas desde MongoDB (`candles`) en el rango indicado.
-- Si no hay velas para el rango, primero ejecuta `python -m scripts.save_analysis`.
-- El script pide parámetros interactivos: símbolo, temporalidad, rango UTC,
-  breakeven, pendiente mínima y ajustes de filtro de tendencia/riesgo adaptativo.
-
-### Módulos de indicadores
+Si preferis API:
 
 ```bash
-# EMAs y pendientes
-python -m indicators.emas
-
-# Descarga y gráfico básico de precios
-python -m indicators.prices
+source venv/bin/activate
+python -m scripts.save_analysis
+uvicorn fastapi dev
 ```
 
-## Persistencia en MongoDB
+## Uso por CLI
 
-El pipeline guarda información en colecciones separadas para poder consultar o reconstruir el análisis después:
+### 1) Pipeline de analisis y guardado
+
+```bash
+python -m scripts.save_analysis
+```
+
+Este script:
+
+- Descarga velas desde Binance (`/klines`, limite maximo por request: 1000).
+- Calcula tendencias, EMAs (10/55/200), ADX, SMI y niveles S/R.
+- Hace upsert en colecciones de analisis y guarda un `analysis` consolidado.
+
+### 2) Backtest interactivo
+
+```bash
+python -m scripts.run_backtest
+```
+
+Flujo del backtest CLI:
+
+1. Lee candles desde MongoDB para el rango ingresado.
+2. Genera senales EMA(10/55) + filtros (slope, gap, ADX/DI).
+3. Ejecuta simulacion long.
+4. Construye `alerts_feed` y `signals_timeline`.
+5. Genera grafico PDF.
+6. Guarda el resultado completo en `backtests` (incluyendo `report_pdf_filename`).
+
+## Uso por API
+
+### Levantar servidor
+
+```bash
+fastapi dev
+```
+
+### Probar endpoints sin Bash
+
+Con FastAPI ya tenes documentacion interactiva:
+
+- Swagger UI: `http://localhost:8000/docs`
+- ReDoc: `http://localhost:8000/redoc`
+- OpenAPI JSON: `http://localhost:8000/openapi.json`
+
+Tambien podes probar los endpoints en Postman importando la spec OpenAPI desde:
+
+- `http://localhost:8000/openapi.json`
+
+### Endpoints
+
+- `POST /api/backtests/run`: corre un backtest nuevo usando candles ya persistidas.
+- `GET /api/backtests?limit=20`: lista backtests guardados.
+- `GET /api/backtests/{backtest_id}`: obtiene un backtest por id.
+
+### Body JSON minimo (para Swagger o Postman)
+
+```json
+{
+    "symbol": "BTCUSDT",
+    "interval": "4h",
+    "start_time": "2026-03-01",
+    "end_time": null,
+    "min_slope_pct": 0.11,
+    "exit_slope_periods": 2,
+    "ema_gap_min_pct": 0.0,
+    "adx_min": 23,
+    "adx_require_di": true,
+    "adx_require_rising": false,
+    "leverage": 1,
+    "initial_capital": 100000
+}
+```
+
+### Body JSON completo (para Swagger o Postman)
+
+```json
+{
+    "symbol": "BTCUSDT",
+    "interval": "4h",
+    "start_time": "2026-03-01",
+    "end_time": null,
+    "initial_capital": 100000,
+    "leverage": 1,
+    "stop_loss_pct": null,
+    "take_profit_pct": null,
+    "breakeven_trigger_pct": null,
+    "min_slope_pct": 0.11,
+    "exit_slope_periods": 2,
+    "ema_gap_min_pct": 0.0,
+    "adx_min": 23,
+    "adx_require_di": true,
+    "adx_require_rising": false,
+    "atr_period": 14,
+    "atr_stop_mult": 1.8,
+    "atr_trailing_mult": 2.2
+}
+```
+
+## Colecciones MongoDB
+
+El proyecto utiliza estas colecciones:
 
 - `candles`
 - `trends`
@@ -147,16 +205,65 @@ El pipeline guarda información en colecciones separadas para poder consultar o 
 - `analysis`
 - `backtests`
 
-`AnalysisRecord` incluye el análisis consolidado del rango, junto con velas, tendencias, EMAs, ADX, SMI y soportes/resistencias.
+En `backtests` se persisten:
 
-La colección `backtests` guarda cada ejecucion con:
+- Metricas agregadas de performance.
+- Lista de `trades`.
+- `config` de ejecucion.
+- `alerts_feed` (mensajes narrativos de eventos).
+- `signals_timeline` (debug detallado de condiciones por vela relevante).
+- `report_pdf_filename` (cuando aplica en CLI).
 
-- configuración usada (`BacktestConfig`)
-- lista completa de operaciones (`trades`)
-- métricas agregadas (capital final, retorno, win rate, profit factor, max drawdown)
+## Parametros de estrategia
 
-## Notas
+Los parametros mas importantes para controlar calidad/frecuencia de senales son:
 
-- Los scripts interactivos piden símbolo, temporalidad y rango de fechas en UTC.
-- `scripts.save_analysis` requiere una conexión a MongoDB configurada.
-- `scripts.run_backtest` también requiere MongoDB y datos de velas previamente guardados.
+- `min_slope_pct`: pendiente minima de EMA10 para validar entrada.
+- `ema_gap_min_pct`: gap minimo entre EMA10 y EMA55.
+- `adx_min`: fuerza minima de tendencia.
+- `adx_require_di`: exige `+DI > -DI` en entrada.
+- `adx_require_rising`: exige ADX no decreciente.
+- `exit_slope_periods`: confirma salida por pendiente negativa sostenida.
+
+Regla practica:
+
+- Subir filtros (`min_slope_pct`, `ema_gap_min_pct`, `adx_min`) reduce cantidad de operaciones y prioriza calidad.
+
+## Troubleshooting
+
+### 404 al correr `POST /api/backtests/run`
+
+No hay candles en Mongo para ese rango. Ejecuta primero:
+
+```bash
+python -m scripts.save_analysis
+```
+
+### Error de conexion a MongoDB
+
+- Verifica `MONGO_URI` en `.env`.
+- Verifica que Mongo este levantado y accesible.
+
+### No se guarda nombre de PDF
+
+En flujo CLI actual, el guardado del backtest ocurre despues de generar el PDF, por lo que `report_pdf_filename` queda persistido en una sola insercion.
+
+### Rango largo trae menos velas de las esperadas
+
+`/klines` de Binance tiene limite por request (`limit <= 1000`). Si necesitas ventanas mas largas, hay que paginar por rango de tiempo.
+
+## Estructura del proyecto
+
+```text
+crypto_analysis/
+├── API/                # FastAPI (routers, schemas, servicios)
+├── backtesting/        # Estrategias, simulador, reportes, alertas
+├── dashboard/          # Visualizaciones
+├── database/           # Conexion y repositorio MongoDB
+├── indicators/         # Indicadores tecnicos
+├── scripts/            # Entrypoints CLI
+├── services/           # Integraciones externas (Binance)
+├── utils/              # Helpers de parsing/conversion
+├── requirements.txt
+└── pyproject.toml
+```
