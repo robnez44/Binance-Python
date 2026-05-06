@@ -183,6 +183,7 @@ class BacktestResponse(BaseModel):
     avg_trade_return_pct: float
 
     # Detalle completo
+    loaded_candles_count: int = Field(0, ge=0)
     trades: List[TradeResponse]
     config: Optional[BacktestConfigResponse]
     alerts_feed: List[BacktestAlertResponse] = Field(default_factory=list)

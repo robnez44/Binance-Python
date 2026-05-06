@@ -125,6 +125,7 @@ async def main() -> None:
         )
 
         print_summary(result, params, trade_contexts)
+        result.loaded_candles_count = len(candles)
         plot_backtest(times, opens, highs, lows, closes, signals, result, params)
 
         # Guardar una sola vez, ya con el nombre de PDF resuelto.

@@ -119,6 +119,7 @@ def backtest_result_to_dict(result: BacktestResult) -> Dict[str, Any]:
         "interval": result.interval,
         "start_time": result.start_time,
         "end_time": result.end_time,
+        "loaded_candles_count": result.loaded_candles_count,
         "strategy_name": result.strategy_name,
         "initial_capital": result.initial_capital,
         "final_capital": result.final_capital,

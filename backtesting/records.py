@@ -107,6 +107,7 @@ class BacktestResult:
     interval:               str = ""                                    # "4h", "1d"
     start_time:             Optional[datetime] = None                   # Inicio del rango testeado
     end_time:               Optional[datetime] = None                   # Fin del rango testeado
+    loaded_candles_count:   int = 0                                      # Cantidad de velas cargadas usadas en el backtest
     trades:                 List[Trade] = field(default_factory=list)   # Lista de todos los trades ejecutados
     initial_capital:        float = 0.0                                 # Capital inicial usado
     final_capital:          float = 0.0                                 # Capital final después de cerrar todas las posiciones

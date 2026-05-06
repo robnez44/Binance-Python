@@ -96,6 +96,7 @@ async def execute_backtest(req: BacktestRequest) -> Optional[BacktestResponse]:
         interval=req.interval,
     )
 
+    result.loaded_candles_count = len(candles)
     slope_pct = ema_pct_slope(signals.ema_fast)
     result.alerts_feed = build_alerts_feed(
         times=times,
