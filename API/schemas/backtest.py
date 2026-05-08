@@ -102,6 +102,7 @@ class TradeResponse(BaseModel):
     return_pct:    float
     candles_held:  int
     exit_reason:   str
+    exit_reason_label: Optional[str] = None
     equity_before: float
     equity_after:  float
 
@@ -133,6 +134,7 @@ class BacktestAlertResponse(BaseModel):
     price: float
     trade_number: Optional[int] = None
     exit_reason: Optional[str] = None
+    exit_reason_label: Optional[str] = None
 
 class BacktestSignalTimelineRowResponse(BaseModel):
     """Fila de timeline de velas relevantes para tabla de debug."""

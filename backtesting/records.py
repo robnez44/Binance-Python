@@ -57,6 +57,7 @@ class BacktestAlertEvent:
     price: float
     trade_number: Optional[int] = None
     exit_reason: Optional[str] = None
+    exit_reason_label: Optional[str] = None
 
 @dataclass
 class SignalTimelineRow:

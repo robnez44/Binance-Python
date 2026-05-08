@@ -5,25 +5,25 @@ from typing import Literal
 ExitReasonLabelStyle = Literal["plain", "icon"]
 
 _PLAIN_LABELS: dict[str, str] = {
-    "take_profit": "take profit",
-    "stop_loss": "stop loss",
-    "atr_stop_loss": "atr stop",
-    "atr_trailing_stop": "trailing sl by atr",
-    "breakeven_stop": "breakeven",
-    "stop_loss_priority_same_bar": "stop loss (same bar)",
-    "signal_exit": "signal exit",
-    "end_of_data": "end of data",
+    "take_profit": "Take Profit Target Hit",
+    "stop_loss": "Stop Loss Triggered",
+    "atr_stop_loss": "Dynamic ATR Stop Loss Hit",
+    "atr_trailing_stop": "Trailing Stop Loss (ATR) Hit",
+    "breakeven_stop": "Price Returned to Breakeven",
+    "stop_loss_priority_same_bar": "Stop Loss Hit (Same Bar)",
+    "signal_exit": "Strategy Signal Exit",
+    "end_of_data": "Position Closed at Data End",
 }
 
 _ICON_LABELS: dict[str, str] = {
-    "take_profit": "✔  take_profit",
-    "stop_loss": "✘  stop_loss",
-    "atr_stop_loss": "✘  atr_stop",
-    "atr_trailing_stop": "✘  Trailing SL by ATR",
-    "breakeven_stop": "◈  breakeven",
-    "stop_loss_priority_same_bar": "✘  sl_same_bar",
-    "signal_exit": "↩  signal_exit",
-    "end_of_data": "⏹  end_of_data",
+    "take_profit": "✔  Take Profit Target Hit",
+    "stop_loss": "✘  Stop Loss Triggered",
+    "atr_stop_loss": "✘  Dynamic ATR Stop Loss",
+    "atr_trailing_stop": "✘  Trailing Stop Loss (ATR)",
+    "breakeven_stop": "◈  Breakeven Stop",
+    "stop_loss_priority_same_bar": "✘  Stop Loss (Same Bar)",
+    "signal_exit": "↩  Strategy Signal Exit",
+    "end_of_data": "⏹  Data End Closure",
 }
 
 def exit_reason_label(reason: str, style: ExitReasonLabelStyle = "plain") -> str:

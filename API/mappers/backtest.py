@@ -2,6 +2,7 @@ from __future__ import annotations
 from dataclasses import asdict
 
 from backtesting.records import BacktestConfig, BacktestResult, Trade
+from backtesting.reporting_utils import exit_reason_label
 from API.schemas.backtest import (
     BacktestConfigResponse,
     BacktestResponse,
@@ -20,6 +21,7 @@ def trade_to_response(trade: Trade) -> TradeResponse:
         return_pct=trade.return_pct,
         candles_held=trade.candles_held,
         exit_reason=trade.exit_reason,
+        exit_reason_label=exit_reason_label(trade.exit_reason, style="plain"),
         equity_before=trade.equity_before,
         equity_after=trade.equity_after,
     )
@@ -86,6 +88,7 @@ def doc_to_backtest_response(doc: dict) -> BacktestResponse:
             return_pct=float(t["return_pct"]),
             candles_held=int(t["candles_held"]),
             exit_reason=t["exit_reason"],
+            exit_reason_label=exit_reason_label(str(t["exit_reason"]), style="plain"),
             equity_before=float(t["equity_before"]),
             equity_after=float(t["equity_after"]),
         )

@@ -65,6 +65,7 @@ def alert_event_to_dict(event: BacktestAlertEvent) -> Dict[str, Any]:
         "price": event.price,
         "trade_number": event.trade_number,
         "exit_reason": event.exit_reason,
+        "exit_reason_label": event.exit_reason_label,
     }
 
 def signal_timeline_row_to_dict(row: SignalTimelineRow) -> Dict[str, Any]:

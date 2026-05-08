@@ -10,6 +10,26 @@ from backtesting.records import (
 )
 from backtesting.reporting_utils import exit_reason_label
 
+
+def _format_timeline_event(event_code: str) -> str:
+    """Convierte códigos de eventos técnicos a labels legibles para la timeline."""
+    if event_code.startswith("entry_signal"):
+        return "🟢 Entry Signal"
+    elif event_code.startswith("exit_signal"):
+        return "🔴 Exit Signal"
+    elif event_code.startswith("entry_exec_t"):
+        # Extrae número de trade: "entry_exec_t1" → "Trade #1 Entry Executed"
+        trade_no = event_code.replace("entry_exec_t", "")
+        return f"🟢 Trade #{trade_no} Entry Executed"
+    elif event_code.startswith("exit_exec_t"):
+        # Extrae número y motivo: "exit_exec_t1_signal_exit" → "Trade #1 Exit (Signal Exit)"
+        parts = event_code.replace("exit_exec_t", "").split("_", 1)
+        trade_no = parts[0]
+        reason = parts[1] if len(parts) > 1 else "unknown"
+        reason_label = exit_reason_label(reason, style="plain")
+        return f"🔴 Trade #{trade_no} Exit ({reason_label})"
+    return event_code
+
 def _format_alert_message(
     event_type: str,
     trade_number: int,
@@ -154,6 +174,7 @@ def build_alerts_feed(
                     price=float(closes[entry_signal_index]),
                     trade_number=trade_number,
                     exit_reason=None,
+                    exit_reason_label=None,
                 )
             )
 
@@ -172,6 +193,7 @@ def build_alerts_feed(
                     price=float(trade.entry_price),
                     trade_number=trade_number,
                     exit_reason=None,
+                    exit_reason_label=None,
                 )
             )
 
@@ -195,6 +217,7 @@ def build_alerts_feed(
                         price=float(closes[exit_signal_index]),
                         trade_number=trade_number,
                         exit_reason="signal_exit",
+                        exit_reason_label=exit_reason_label("signal_exit", style="plain"),
                     )
                 )
 
@@ -215,6 +238,7 @@ def build_alerts_feed(
                     price=float(trade.exit_price),
                     trade_number=trade_number,
                     exit_reason=trade.exit_reason,
+                    exit_reason_label=exit_reason_label(trade.exit_reason, style="plain"),
                 )
             )
 
@@ -300,15 +324,22 @@ def build_signals_timeline(
         cond_price_gt_ema10 = close > ema10
 
         events: list[str] = []
+        event_codes: list[str] = []
         if i in entry_signal_indices:
-            events.append("entry_signal")
+            events.append("Entry Signal")
+            event_codes.append("entry_signal")
         if i in exit_signal_indices:
-            events.append("exit_signal")
+            events.append("Exit Signal")
+            event_codes.append("exit_signal")
         if i in entry_exec_map:
-            events.append(f"entry_exec_t{entry_exec_map[i]}")
+            trade_no = entry_exec_map[i]
+            events.append(f"Trade #{trade_no} Entry Executed")
+            event_codes.append(f"entry_exec_t{trade_no}")
         if i in exit_exec_map:
             trade_no, reason = exit_exec_map[i]
-            events.append(f"exit_exec_t{trade_no}_{reason}")
+            reason_label = exit_reason_label(reason, style="plain")
+            events.append(f"Trade #{trade_no} Exit ({reason_label})")
+            event_codes.append(f"exit_exec_t{trade_no}_{reason}")
 
         rows.append(
             SignalTimelineRow(

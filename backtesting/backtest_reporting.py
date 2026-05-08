@@ -109,7 +109,9 @@ def debug_signals(
             eventos.append(f"EXEC ENTRADA  open={t2.entry_price:,.2f}")
         if i in exit_exec:
             t2 = exit_exec[i]
-            eventos.append(f"EXEC SALIDA   open={t2.exit_price:,.2f}  ({t2.exit_reason})")
+            eventos.append(
+                f"EXEC SALIDA   open={t2.exit_price:,.2f}  ({exit_reason_label(t2.exit_reason, style='plain')})"
+            )
 
         evento_str = "  |  ".join(eventos) if eventos else ""
         slope_fmt = f"{slope:+.4f}".rjust(8)
@@ -136,7 +138,7 @@ def debug_signals(
             f"  Trade #{idx}  "
             f"señal[{t.entry_index - 1}] → exec[{t.entry_index}]  "
             f"señal_exit[{t.exit_index - 1}] → exec[{t.exit_index}]  "
-            f"PnL: {pnl_s}${t.pnl:,.2f}  ({t.exit_reason})"
+            f"PnL: {pnl_s}${t.pnl:,.2f}  ({exit_reason_label(t.exit_reason, style='plain')})"
         )
     print("═" * W)
     print()
