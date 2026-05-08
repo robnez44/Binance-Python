@@ -9,6 +9,41 @@ from API.schemas.backtest import (
     TradeResponse,
 )
 
+def _map_timeline_event_code(code: str) -> str:
+    """Mapea un código técnico de timeline a una etiqueta legible.
+
+    Ejemplos:
+      - "entry_signal" -> "Entry Signal"
+      - "exit_exec_t1_signal_exit" -> "Trade #1 Exit (Strategy Signal Exit)"
+    """
+    if not code:
+        return code
+
+    def _map_token(token: str) -> str:
+        if token.startswith("entry_signal"):
+            return "Entry Signal"
+        if token.startswith("exit_signal"):
+            return "Exit Signal"
+        if token.startswith("entry_exec_t"):
+            trade_no = token.replace("entry_exec_t", "")
+            return f"Trade #{trade_no} Entry Executed"
+        if token.startswith("exit_exec_t"):
+            rest = token.replace("exit_exec_t", "")
+            parts = rest.split("_", 1)
+            trade_no = parts[0]
+            reason = parts[1] if len(parts) > 1 else "unknown"
+            reason_label = exit_reason_label(reason, style="plain")
+            return f"Trade #{trade_no} Exit ({reason_label})"
+        return token
+
+    # tokens pueden estar separados por ' | ' o '_'
+    if " | " in code:
+        tokens = code.split(" | ")
+        return " | ".join(_map_token(t) for t in tokens)
+
+    # si hay múltiples sub-tokens con underscore después de exit_exec_t
+    return _map_token(code)
+
 def trade_to_response(trade: Trade) -> TradeResponse:
     return TradeResponse(
         entry_time=trade.entry_time,
@@ -48,6 +83,12 @@ def config_to_response(config: BacktestConfig) -> BacktestConfigResponse:
 def result_to_backtest_response(result: BacktestResult, backtest_id: str) -> BacktestResponse:
     alerts_feed_payload = [asdict(event) for event in result.alerts_feed]
     signals_timeline_payload = [asdict(row) for row in result.signals_timeline]
+
+    # Normalizar cualquier código técnico en 'event' a una etiqueta legible
+    for row in signals_timeline_payload:
+        ev = row.get("event")
+        if isinstance(ev, str) and ev:
+            row["event"] = _map_timeline_event_code(ev)
 
     return BacktestResponse(
         id=backtest_id,
@@ -115,6 +156,19 @@ def doc_to_backtest_response(doc: dict) -> BacktestResponse:
             atr_trailing_mult=raw_config.get("atr_trailing_mult"),
             atr_stop_confirm_on_close=bool(raw_config.get("atr_stop_confirm_on_close", True)),
         )
+    # If signals_timeline is present in the stored doc, map any technical event codes
+    raw_timeline = doc.get(
+        "signals_timeline",
+        doc.get("alerts_timeline", doc.get("relevant_signals_timeline", [])),
+    )
+    signals_timeline_payload = []
+    for row in raw_timeline:
+        if isinstance(row, dict):
+            ev = row.get("event")
+            if isinstance(ev, str) and ev:
+                row = dict(row)  # copy
+                row["event"] = _map_timeline_event_code(ev)
+        signals_timeline_payload.append(row)
 
     return BacktestResponse(
         id=str(doc["_id"]),
@@ -138,8 +192,5 @@ def doc_to_backtest_response(doc: dict) -> BacktestResponse:
         trades=trades,
         config=config,
         alerts_feed=doc.get("alerts_feed", []),
-        signals_timeline=doc.get(
-            "signals_timeline",
-            doc.get("alerts_timeline", doc.get("relevant_signals_timeline", [])),
-        ),
+        signals_timeline=signals_timeline_payload,
     )
