@@ -2,6 +2,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import List, Optional
 from pydantic import BaseModel, Field
+from API.schemas.series import SeriesDataResponse
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  REQUEST
@@ -189,4 +190,7 @@ class BacktestResponse(BaseModel):
     trades: List[TradeResponse]
     config: Optional[BacktestConfigResponse]
     alerts_feed: List[BacktestAlertResponse] = Field(default_factory=list)
+    analysis_record_id: Optional[str] = None
+    analysis_reused: bool = False
+    series: Optional[SeriesDataResponse] = None
     signals_timeline: List[BacktestSignalTimelineRowResponse] = Field(default_factory=list)

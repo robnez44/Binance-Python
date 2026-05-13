@@ -5,9 +5,10 @@ import pandas as pd
 
 from backtesting.alerts import build_alerts_feed, build_signals_timeline
 from backtesting.records import BacktestConfig, BacktestResult
+from backtesting.series import build_series_payload
 from backtesting.strategies import build_ema_long_signals
 from backtesting.simulator import run_long_backtest
-from database.repository import get_candles, save_backtest_result
+from database.repository import get_analysis_for_range, get_candles, save_backtest_result
 from API.schemas.backtest import BacktestRequest, BacktestResponse
 from API.mappers.backtest import result_to_backtest_response
 from indicators.emas import ema_pct_slope
@@ -96,7 +97,22 @@ async def execute_backtest(req: BacktestRequest) -> Optional[BacktestResponse]:
         interval=req.interval,
     )
 
+    series_doc = await get_analysis_for_range(
+        symbol=req.symbol,
+        interval=req.interval,
+        start_time=times[0].to_pydatetime(),
+        end_time=times[-1].to_pydatetime(),
+    )
+
     result.loaded_candles_count = len(candles)
+    result.analysis_reused = True
+    result.analysis_record_id = str(series_doc.get("_id"))
+    use_adx = req.adx_min > 0 or req.adx_require_di or req.adx_require_rising
+    # Build series payload for response only (do NOT attach to result or persist)
+    series_payload = build_series_payload(
+        analysis_doc=series_doc,
+        include_adx_points=use_adx,
+    )
     slope_pct = ema_pct_slope(signals.ema_fast)
     result.alerts_feed = build_alerts_feed(
         times=times,
@@ -118,5 +134,5 @@ async def execute_backtest(req: BacktestRequest) -> Optional[BacktestResponse]:
     # Guardar en MongoDB
     backtest_id: str = await save_backtest_result(result)
 
-    # Convertir a schema de respuesta
-    return result_to_backtest_response(result, backtest_id)
+    # Convertir a schema de respuesta — pasar `series_payload` separado
+    return result_to_backtest_response(result, backtest_id, series_payload)

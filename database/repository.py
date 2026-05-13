@@ -245,6 +245,33 @@ async def save_analysis(record: AnalysisRecord) -> str:
 
     return str(result.upserted_id or "updated")
 
+async def get_analysis_for_range(
+    symbol: str,
+    interval: str,
+    start_time: datetime,
+    end_time: datetime,
+) -> Optional[Dict]:
+    """Busca un analysis que cubra el rango pedido (o exacto), priorizando el más reciente."""
+    db = get_db()
+
+    covering_query = {
+        "symbol": symbol,
+        "interval": interval,
+        "start_time": {"$lte": start_time},
+        "end_time": {"$gte": end_time},
+    }
+    doc = await db.analysis.find_one(covering_query, sort=[("created_at", -1)])
+    if doc is not None:
+        return doc
+
+    exact_query = {
+        "symbol": symbol,
+        "interval": interval,
+        "start_time": start_time,
+        "end_time": end_time,
+    }
+    return await db.analysis.find_one(exact_query)
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  Backtesting
 # ══════════════════════════════════════════════════════════════════════════════

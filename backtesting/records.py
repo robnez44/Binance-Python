@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, List, Optional
 import numpy as np
 
 @dataclass
@@ -108,7 +108,6 @@ class BacktestResult:
     interval:               str = ""                                    # "4h", "1d"
     start_time:             Optional[datetime] = None                   # Inicio del rango testeado
     end_time:               Optional[datetime] = None                   # Fin del rango testeado
-    loaded_candles_count:   int = 0                                      # Cantidad de velas cargadas usadas en el backtest
     trades:                 List[Trade] = field(default_factory=list)   # Lista de todos los trades ejecutados
     initial_capital:        float = 0.0                                 # Capital inicial usado
     final_capital:          float = 0.0                                 # Capital final después de cerrar todas las posiciones
@@ -124,5 +123,8 @@ class BacktestResult:
     report_pdf_filename:    Optional[str] = None                        # Nombre del PDF generado con el gráfico del backtest
     config:                 Optional[BacktestConfig] = None             # Configuracion usada (para reproducibilidad)
     alerts_feed:            List[BacktestAlertEvent] = field(default_factory=list)  # Alertas estilo bot (eventos relevantes)
+    analysis_record_id:     Optional[str] = None                        # ID de analysis reutilizado (si existe)
+    analysis_reused:        bool = False                                # Indica si el backtest reutilizo data de analysis
+    loaded_candles_count:   int = 0                                     # Cantidad de velas cargadas usadas en el backtest
     signals_timeline:       List[SignalTimelineRow] = field(default_factory=list)  # Filas de velas relevantes para tabla debug
     created_at:             Optional[datetime] = None                   # Fecha en que se corrio el backtest

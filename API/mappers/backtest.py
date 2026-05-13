@@ -8,6 +8,7 @@ from API.schemas.backtest import (
     BacktestResponse,
     TradeResponse,
 )
+from API.schemas.series import SeriesDataResponse
 
 def _map_timeline_event_code(code: str) -> str:
     """Mapea un código técnico de timeline a una etiqueta legible.
@@ -80,7 +81,7 @@ def config_to_response(config: BacktestConfig) -> BacktestConfigResponse:
         atr_stop_confirm_on_close=config.atr_stop_confirm_on_close,
     )
 
-def result_to_backtest_response(result: BacktestResult, backtest_id: str) -> BacktestResponse:
+def result_to_backtest_response(result: BacktestResult, backtest_id: str, series_payload: dict | None = None) -> BacktestResponse:
     alerts_feed_payload = [asdict(event) for event in result.alerts_feed]
     signals_timeline_payload = [asdict(row) for row in result.signals_timeline]
 
@@ -98,6 +99,9 @@ def result_to_backtest_response(result: BacktestResult, backtest_id: str) -> Bac
         start_time=result.start_time,
         end_time=result.end_time,
         created_at=result.created_at,
+        analysis_record_id=result.analysis_record_id,
+        analysis_reused=result.analysis_reused,
+        series=SeriesDataResponse.model_validate(series_payload) if series_payload is not None else None,
         initial_capital=result.initial_capital,
         final_capital=result.final_capital,
         total_return_pct=result.total_return_pct,
@@ -178,6 +182,9 @@ def doc_to_backtest_response(doc: dict) -> BacktestResponse:
         start_time=doc.get("start_time"),
         end_time=doc.get("end_time"),
         created_at=doc.get("created_at"),
+        analysis_record_id=str(doc.get("analysis_record_id")) if doc.get("analysis_record_id") is not None else None,
+        analysis_reused=bool(doc.get("analysis_reused", False)),
+        series=None,
         initial_capital=float(doc["initial_capital"]),
         final_capital=float(doc["final_capital"]),
         total_return_pct=float(doc["total_return_pct"]),

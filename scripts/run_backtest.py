@@ -5,11 +5,12 @@ import pandas as pd
 from backtesting.simulator import run_long_backtest
 from backtesting.strategies import build_ema_long_signals
 from backtesting.alerts import build_alerts_feed, build_signals_timeline
+from backtesting.series import build_series_payload
 from backtesting.backtest_params import ask_backtest_params
 from backtesting.backtest_plot import plot_backtest
 from backtesting.backtest_reporting import build_trade_context, check_alerts, debug_signals, print_summary
 from database.database import connectDB, disconnect
-from database.repository import get_candles, save_backtest_result
+from database.repository import get_analysis_for_range, get_candles, save_backtest_result
 from indicators.emas import ema_pct_slope
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -125,7 +126,22 @@ async def main() -> None:
         )
 
         print_summary(result, params, trade_contexts)
+        series_doc = await get_analysis_for_range(
+            symbol=params["symbol"],
+            interval=params["interval"],
+            start_time=times[0].to_pydatetime(),
+            end_time=times[-1].to_pydatetime(),
+        )
         result.loaded_candles_count = len(candles)
+        # Si hay analysis, siempre lo reutilizamos
+        result.analysis_reused = True
+        result.analysis_record_id = str(series_doc.get("_id"))
+        use_adx = params["adx_min"] > 0 or params["adx_require_di"] or params["adx_require_rising"]
+        # Build series payload for display only (do not attach to result or persist)
+        series_payload = build_series_payload(
+            analysis_doc=series_doc,
+            include_adx_points=use_adx,
+        )
         plot_backtest(times, opens, highs, lows, closes, signals, result, params)
 
         # Guardar una sola vez, ya con el nombre de PDF resuelto.
