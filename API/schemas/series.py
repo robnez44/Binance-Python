@@ -80,10 +80,9 @@ class SeriesDataResponse(BaseModel):
     start_price: float
     end_price: float
     total_candles: int
-    trends: List[SegmentMetricsResponse]
+    trends: Optional[List[SegmentMetricsResponse]] = None
     candles: Optional[List[CandleResponse]] = None
     ema_points: Optional[Dict[str, List[EMASnapshotResponse]]] = None
     adx_points: Optional[List[ADXSnapshotResponse]] = None
     smi_points: Optional[List[SMISnapshotResponse]] = None
     sr_levels: Optional[List[SRLevelResponse]] = None
-    created_at: Optional[datetime] = None

@@ -1,16 +1,20 @@
 from __future__ import annotations
 from typing import Optional
+from bson import ObjectId
 import numpy as np
 import pandas as pd
 
 from backtesting.alerts import build_alerts_feed, build_signals_timeline
 from backtesting.records import BacktestConfig, BacktestResult
-from backtesting.series import build_series_payload
 from backtesting.strategies import build_ema_long_signals
 from backtesting.simulator import run_long_backtest
-from database.repository import get_analysis_for_range, get_candles, save_backtest_result
+from database.repository import (
+    get_candles,
+    save_backtest_result,
+)
 from API.schemas.backtest import BacktestRequest, BacktestResponse
-from API.mappers.backtest import result_to_backtest_response
+from API.mappers.backtest import result_to_backtest_response, doc_to_backtest_response
+from database.database import get_db
 from indicators.emas import ema_pct_slope
 from utils.utils import parse_utc
 
@@ -39,6 +43,10 @@ async def execute_backtest(req: BacktestRequest) -> Optional[BacktestResponse]:
 
     if not candles:
         return None
+
+    series_start_time = candles[0].open_time
+    series_end_time = candles[-1].close_time
+    expected_candle_count = len(candles)
 
     # Arrays numpy
     times:  pd.DatetimeIndex = pd.to_datetime([c.close_time for c in candles], utc=True)
@@ -97,22 +105,8 @@ async def execute_backtest(req: BacktestRequest) -> Optional[BacktestResponse]:
         interval=req.interval,
     )
 
-    series_doc = await get_analysis_for_range(
-        symbol=req.symbol,
-        interval=req.interval,
-        start_time=times[0].to_pydatetime(),
-        end_time=times[-1].to_pydatetime(),
-    )
-
     result.loaded_candles_count = len(candles)
-    result.analysis_reused = True
-    result.analysis_record_id = str(series_doc.get("_id"))
-    use_adx = req.adx_min > 0 or req.adx_require_di or req.adx_require_rising
-    # Build series payload for response only (do NOT attach to result or persist)
-    series_payload = build_series_payload(
-        analysis_doc=series_doc,
-        include_adx_points=use_adx,
-    )
+
     slope_pct = ema_pct_slope(signals.ema_fast)
     result.alerts_feed = build_alerts_feed(
         times=times,
@@ -134,5 +128,57 @@ async def execute_backtest(req: BacktestRequest) -> Optional[BacktestResponse]:
     # Guardar en MongoDB
     backtest_id: str = await save_backtest_result(result)
 
-    # Convertir a schema de respuesta — pasar `series_payload` separado
-    return result_to_backtest_response(result, backtest_id, series_payload)
+    # Convertir a schema de respuesta
+    return result_to_backtest_response(result, backtest_id)
+
+async def list_backtests(
+    symbol: str,
+    interval: str,
+    strategy_name: Optional[str] = None,
+    limit: int = 20,
+) -> list[BacktestResponse]:
+    """Lista backtests de MongoDB para un símbolo e intervalo específicos.
+
+    Args:
+        symbol: Símbolo requerido (ej: BTCUSDT).
+        interval: Intervalo requerido (ej: 4h).
+        strategy_name: Filtrar por nombre de estrategia (opcional).
+        limit: Máximo de resultados (1-200).
+
+    Returns:
+        Lista de BacktestResponse ordenados por fecha descendente.
+    """
+    db = get_db()
+    query: dict = {"symbol": symbol, "interval": interval}
+
+    if strategy_name:
+        query["strategy_name"] = strategy_name
+
+    docs: list[dict] = await db.backtests.find(query).sort("created_at", -1).limit(limit).to_list(length=None)
+    
+    return [doc_to_backtest_response(doc) for doc in docs]
+
+async def get_backtest_by_id(backtest_id: str) -> BacktestResponse:
+    """Obtiene un backtest específico por su ID.
+
+    Args:
+        backtest_id: ObjectId de MongoDB del backtest.
+
+    Returns:
+        BacktestResponse con el backtest solicitado.
+
+    Raises:
+        ValueError: Si el ID es inválido o el backtest no existe.
+    """
+    try:
+        oid = ObjectId(backtest_id)
+    except Exception as e:
+        raise ValueError(f"ID inválido: '{backtest_id}'") from e
+
+    db = get_db()
+    doc: Optional[dict] = await db.backtests.find_one({"_id": oid})
+
+    if doc is None:
+        raise ValueError(f"Backtest '{backtest_id}' no encontrado")
+
+    return doc_to_backtest_response(doc)

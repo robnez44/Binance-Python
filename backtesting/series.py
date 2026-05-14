@@ -1,35 +1,68 @@
 from __future__ import annotations
-from typing import Any, Optional
+from dataclasses import asdict, is_dataclass
+from typing import Any, Iterable, Mapping, Optional
 
+def _normalize_item(item: Any) -> Any:
+    if is_dataclass(item):
+        return asdict(item)
+    if isinstance(item, dict):
+        return {k: v for k, v in item.items() if k != "_id"}
+    return item
+
+def _normalize_mapping(items_by_key: Mapping[str, Iterable[Any]]) -> dict[str, list[Any]]:
+    return {
+        key: [_normalize_item(item) for item in items]
+        for key, items in items_by_key.items()
+    }
 
 def build_series_payload(
-    analysis_doc: Optional[dict[str, Any]],
-    include_adx_points: bool,
+    candles: Iterable[Any],
+    trends: Iterable[Any],
+    ema_points: Mapping[str, Iterable[Any]],
+    smi_points: Iterable[Any],
+    sr_levels: Iterable[Any],
+    adx_points: Optional[Iterable[Any]] = None,
 ) -> Optional[dict[str, Any]]:
     """Construye un payload tipo `series` para exponer dentro del backtest.
 
-    Devuelve None si no se pasó un `analysis_doc`.
+    El payload se arma únicamente con el rango exacto de candles del backtest
+    y con snapshots ya guardados para ese mismo intervalo.
     """
-    if analysis_doc is None:
+    candle_list = [_normalize_item(item) for item in candles]
+    if not candle_list:
         return None
 
+    start_candle = candle_list[0]
+    end_candle = candle_list[-1]
+
     payload: dict[str, Any] = {
-        "symbol": analysis_doc.get("symbol"),
-        "interval": analysis_doc.get("interval"),
-        "start_time": analysis_doc.get("start_time"),
-        "end_time": analysis_doc.get("end_time"),
-        "start_price": analysis_doc.get("start_price"),
-        "end_price": analysis_doc.get("end_price"),
-        "total_candles": analysis_doc.get("total_candles"),
-        "created_at": analysis_doc.get("created_at"),
-        "candles": analysis_doc.get("candles", []),
-        "trends": analysis_doc.get("trends", []),
-        "ema_points": analysis_doc.get("ema_points", {}),
-        "smi_points": analysis_doc.get("smi_points", []),
-        "sr_levels": analysis_doc.get("sr_levels", []),
+        "symbol": start_candle.get("symbol"),
+        "interval": start_candle.get("interval"),
+        "start_time": start_candle.get("open_time"),
+        "end_time": end_candle.get("close_time"),
+        "start_price": start_candle.get("open_price"),
+        "end_price": end_candle.get("close_price"),
+        "total_candles": len(candle_list),
+        "candles": candle_list,
+        "ema_points": _normalize_mapping(ema_points),
+        "smi_points": [_normalize_item(item) for item in smi_points],
+        "sr_levels": [_normalize_item(item) for item in sr_levels],
     }
 
-    if include_adx_points:
-        payload["adx_points"] = analysis_doc.get("adx_points", [])
+    # Para indicadores opcionales, incluir solo si hay datos.
+    if not payload.get("smi_points"):
+        payload.pop("smi_points", None)
+
+    if not payload.get("sr_levels"):
+        payload.pop("sr_levels", None)
+
+    if adx_points:
+        adx_norm = [_normalize_item(item) for item in adx_points]
+        if adx_norm:
+            payload["adx_points"] = adx_norm
+
+    normalized_trends = [_normalize_item(item) for item in trends]
+    if normalized_trends:
+        payload["trends"] = normalized_trends
 
     return payload

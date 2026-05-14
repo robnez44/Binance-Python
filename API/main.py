@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from database.database import connectDB, disconnect
 from API.routers import backtests
+from API.routers import series
 
 # Lifespan
 @asynccontextmanager
@@ -30,6 +31,7 @@ app.add_middleware(
 
 # Routers
 app.include_router(backtests.router, prefix="/api/backtests", tags=["Backtests"])
+app.include_router(series.router, prefix="/api/backtests", tags=["Series"])
 
 @app.get("/", tags=["Health"])
 def health() -> dict[str, str]:

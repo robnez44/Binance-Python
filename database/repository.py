@@ -9,6 +9,9 @@ from database.schemas import (
 )
 from utils.utils import backtest_result_to_dict
 
+def _strip_id(doc: Dict) -> Dict:
+    return {k: v for k, v in doc.items() if k != "_id"}
+
 #  Índices únicos
 async def ensure_indexes() -> None:
     """Crea los índices únicos."""
@@ -107,6 +110,22 @@ async def get_candles(
         for doc in docs
     ]
 
+async def get_trends_for_range(
+    symbol: str,
+    interval: str,
+    start_time: datetime,
+    end_time: datetime,
+) -> List[Dict]:
+    db = get_db()
+    query = {
+        "symbol": symbol,
+        "interval": interval,
+        "start_time": {"$lte": end_time},
+        "end_time": {"$gte": start_time},
+    }
+    docs = await db.trends.find(query).sort([("start_time", 1), ("end_time", 1)]).to_list(length=None)
+    return [_strip_id(doc) for doc in docs]
+
 #  Trends
 async def save_trends(trends: List[SegmentMetrics]) -> int:
     """Guarda/actualiza tendencias. Retorna documentos afectados."""
@@ -155,6 +174,21 @@ async def save_ema_snapshots(snapshots: List[EMASnapshot]) -> int:
     result = await db.ema_snapshots.bulk_write(ops, ordered=False)
     return result.upserted_count + result.modified_count
 
+async def get_ema_snapshots_for_range(
+    symbol: str,
+    interval: str,
+    start_time: datetime,
+    end_time: datetime,
+) -> List[Dict]:
+    db = get_db()
+    query = {
+        "symbol": symbol,
+        "interval": interval,
+        "timestamp": {"$gte": start_time, "$lte": end_time},
+    }
+    docs = await db.ema_snapshots.find(query).sort([("span", 1), ("timestamp", 1)]).to_list(length=None)
+    return [_strip_id(doc) for doc in docs]
+
 #  ADX Snapshots
 async def save_adx_snapshots(snapshots: List[ADXSnapshot]) -> int:
     """Guarda/actualiza snapshots ADX. Retorna documentos afectados."""
@@ -177,6 +211,21 @@ async def save_adx_snapshots(snapshots: List[ADXSnapshot]) -> int:
 
     result = await db.adx_snapshots.bulk_write(ops, ordered=False)
     return result.upserted_count + result.modified_count
+
+async def get_adx_snapshots_for_range(
+    symbol: str,
+    interval: str,
+    start_time: datetime,
+    end_time: datetime,
+) -> List[Dict]:
+    db = get_db()
+    query = {
+        "symbol": symbol,
+        "interval": interval,
+        "timestamp": {"$gte": start_time, "$lte": end_time},
+    }
+    docs = await db.adx_snapshots.find(query).sort("timestamp", 1).to_list(length=None)
+    return [_strip_id(doc) for doc in docs]
 
 #  SMI Snapshots
 async def save_smi_snapshots(snapshots: List[SMISnapshot]) -> int:
@@ -201,6 +250,21 @@ async def save_smi_snapshots(snapshots: List[SMISnapshot]) -> int:
     result = await db.smi_snapshots.bulk_write(ops, ordered=False)
     return result.upserted_count + result.modified_count
 
+async def get_smi_snapshots_for_range(
+    symbol: str,
+    interval: str,
+    start_time: datetime,
+    end_time: datetime,
+) -> List[Dict]:
+    db = get_db()
+    query = {
+        "symbol": symbol,
+        "interval": interval,
+        "timestamp": {"$gte": start_time, "$lte": end_time},
+    }
+    docs = await db.smi_snapshots.find(query).sort("timestamp", 1).to_list(length=None)
+    return [_strip_id(doc) for doc in docs]
+
 #  S/R Levels
 async def save_sr_levels(levels: List[SRLevel]) -> int:
     """Guarda/actualiza niveles S/R. Retorna documentos afectados."""
@@ -224,6 +288,21 @@ async def save_sr_levels(levels: List[SRLevel]) -> int:
 
     result = await db.sr_levels.bulk_write(ops, ordered=False)
     return result.upserted_count + result.modified_count
+
+async def get_sr_levels_for_range(
+    symbol: str,
+    interval: str,
+    start_time: datetime,
+    end_time: datetime,
+) -> List[Dict]:
+    db = get_db()
+    query = {
+        "symbol": symbol,
+        "interval": interval,
+        "timestamp": {"$gte": start_time, "$lte": end_time},
+    }
+    docs = await db.sr_levels.find(query).sort([("timestamp", 1), ("level_type", 1)]).to_list(length=None)
+    return [_strip_id(doc) for doc in docs]
 
 #  Analysis Record (completo con trends + EMAs + ADX + SMI + S/R embebidos)
 async def save_analysis(record: AnalysisRecord) -> str:

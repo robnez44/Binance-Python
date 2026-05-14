@@ -2,7 +2,6 @@ from __future__ import annotations
 from datetime import datetime
 from typing import List, Optional
 from pydantic import BaseModel, Field
-from API.schemas.series import SeriesDataResponse
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  REQUEST
@@ -40,53 +39,6 @@ class BacktestRequest(BaseModel):
     atr_period:        int            = Field(14,  ge=1, description="Periodo del ATR")
     atr_stop_mult:     Optional[float] = Field(1.8,      description="Multiplicador ATR para stop inicial (None = desactivado)")
     atr_trailing_mult: Optional[float] = Field(2.2,      description="Multiplicador ATR para trailing stop (None = desactivado)")
-
-    model_config = {
-        "json_schema_extra": {
-            "examples": [
-                {
-                    "title": "Mínimo (solo campos necesarios)",
-                    "value": {
-                        "symbol": "BTCUSDT",
-                        "interval": "4h",
-                        "start_time": "2026-03-01",
-                        "end_time": None,
-                        "min_slope_pct": 0.11,
-                        "exit_slope_periods": 2,
-                        "ema_gap_min_pct": 0.0,
-                        "adx_min": 23,
-                        "adx_require_di": True,
-                        "adx_require_rising": False,
-                        "leverage": 1,
-                        "initial_capital": 100000
-                    }
-                },
-                {
-                    "title": "Completo (todos los campos)",
-                    "value": {
-                        "symbol": "BTCUSDT",
-                        "interval": "4h",
-                        "start_time": "2026-03-01",
-                        "end_time": None,
-                        "initial_capital": 100000,
-                        "leverage": 1,
-                        "stop_loss_pct": None,
-                        "take_profit_pct": None,
-                        "breakeven_trigger_pct": None,
-                        "min_slope_pct": 0.11,
-                        "exit_slope_periods": 2,
-                        "ema_gap_min_pct": 0.0,
-                        "adx_min": 23,
-                        "adx_require_di": True,
-                        "adx_require_rising": False,
-                        "atr_period": 14,
-                        "atr_stop_mult": 1.8,
-                        "atr_trailing_mult": 2.2
-                    }
-                }
-            ]
-        }
-    }
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  RESPONSE — espejo de Trade, BacktestConfig y BacktestResult de records.py
@@ -190,7 +142,4 @@ class BacktestResponse(BaseModel):
     trades: List[TradeResponse]
     config: Optional[BacktestConfigResponse]
     alerts_feed: List[BacktestAlertResponse] = Field(default_factory=list)
-    analysis_record_id: Optional[str] = None
-    analysis_reused: bool = False
-    series: Optional[SeriesDataResponse] = None
     signals_timeline: List[BacktestSignalTimelineRowResponse] = Field(default_factory=list)
