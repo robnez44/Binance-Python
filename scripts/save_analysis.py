@@ -19,7 +19,7 @@ from database.repository import (
 from database.schemas import AnalysisRecord, Candle
 
 # ── Parámetros ────────────────────────────────────────────────────────────── #
-EMA_SPANS  = [10, 55, 200]
+EMA_SPANS  = [10, 55]
 WINDOW     = 10
 MIN_WIN    = 5
 MIN_R2     = 0.65

@@ -158,7 +158,8 @@ def parse_utc(s: str) -> datetime:
 
 def ask_candles_params():
     # ---- symbol fijo por ahora ---
-    symbol = "BTCUSDT"
+    smbl = input("Simbolo (default: BTCUSDT): ").strip()
+    symbol = smbl if smbl else "BTCUSDT"
 
     # --- interval ---
     interval = input("Temporalidad (ej: 4h, 1d, 3d, 1w, 1M): ").strip()
