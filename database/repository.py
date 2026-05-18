@@ -355,12 +355,14 @@ async def get_analysis_for_range(
 #  Backtesting
 # ══════════════════════════════════════════════════════════════════════════════
 
-async def save_backtest_result(result) -> str:
+async def save_backtest_result(result, trade_markers: Optional[List[Dict]] = None) -> str:
     """
     Guarda un BacktestResult en MongoDB. Retorna el _id del documento insertado.
     """
     db = get_db()
     doc = backtest_result_to_dict(result)
+    if trade_markers is not None:
+        doc["trade_markers"] = trade_markers
     insert_result = await db.backtests.insert_one(doc)
     return str(insert_result.inserted_id)
 

@@ -6,6 +6,7 @@ import pandas as pd
 
 from backtesting.alerts import build_alerts_feed, build_signals_timeline
 from backtesting.records import BacktestConfig, BacktestResult
+from backtesting.reporting_utils import exit_reason_label
 from backtesting.strategies import build_ema_long_signals
 from backtesting.simulator import run_long_backtest
 from database.repository import (
@@ -17,6 +18,54 @@ from API.mappers.backtest import result_to_backtest_response, doc_to_backtest_re
 from database.database import get_db
 from indicators.emas import ema_pct_slope
 from utils.utils import parse_utc
+
+def _build_trade_markers(result: BacktestResult, candles: list) -> list[dict]:
+    """Construye marcadores de entrada/salida para consumo de frontend.
+
+    Usa `bar_time` basado en `open_time` de la vela para anclar el marker en chart.
+    """
+    candle_open_times = [c.open_time for c in candles]
+    markers: list[dict] = []
+
+    for trade_number, trade in enumerate(result.trades, 1):
+        if 0 <= trade.entry_index < len(candle_open_times):
+            markers.append(
+                {
+                    "trade_number": trade_number,
+                    "marker_type": "entry_exec",
+                    "side": trade.side,
+                    "bar_index": int(trade.entry_index),
+                    "bar_time": candle_open_times[trade.entry_index],
+                    "execution_time": trade.entry_time,
+                    "price": float(trade.entry_price),
+                }
+            )
+
+        if 0 <= trade.exit_index < len(candle_open_times):
+            markers.append(
+                {
+                    "trade_number": trade_number,
+                    "marker_type": "exit_exec",
+                    "side": trade.side,
+                    "bar_index": int(trade.exit_index),
+                    "bar_time": candle_open_times[trade.exit_index],
+                    "execution_time": trade.exit_time,
+                    "price": float(trade.exit_price),
+                    "pnl": float(trade.pnl),
+                    "is_win": bool(trade.pnl > 0),
+                    "exit_reason": trade.exit_reason,
+                    "exit_reason_label": exit_reason_label(trade.exit_reason, style="plain"),
+                }
+            )
+
+    markers.sort(
+        key=lambda marker: (
+            marker["bar_index"],
+            0 if marker["marker_type"] == "entry_exec" else 1,
+            marker["trade_number"],
+        )
+    )
+    return markers
 
 async def execute_backtest(req: BacktestRequest) -> Optional[BacktestResponse]:
     """
@@ -43,10 +92,6 @@ async def execute_backtest(req: BacktestRequest) -> Optional[BacktestResponse]:
 
     if not candles:
         return None
-
-    series_start_time = candles[0].open_time
-    series_end_time = candles[-1].close_time
-    expected_candle_count = len(candles)
 
     # Arrays numpy
     times:  pd.DatetimeIndex = pd.to_datetime([c.close_time for c in candles], utc=True)
@@ -125,11 +170,13 @@ async def execute_backtest(req: BacktestRequest) -> Optional[BacktestResponse]:
         ema_gap_min_pct=req.ema_gap_min_pct,
     )
 
+    trade_markers = _build_trade_markers(result, candles)
+
     # Guardar en MongoDB
-    backtest_id: str = await save_backtest_result(result)
+    backtest_id: str = await save_backtest_result(result, trade_markers=trade_markers)
 
     # Convertir a schema de respuesta
-    return result_to_backtest_response(result, backtest_id)
+    return result_to_backtest_response(result, backtest_id, trade_markers=trade_markers)
 
 async def list_backtests(
     symbol: Optional[str] = None,

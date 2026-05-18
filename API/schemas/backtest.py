@@ -107,6 +107,19 @@ class BacktestSignalTimelineRowResponse(BaseModel):
     minus_di: Optional[float] = None
     event: Optional[str] = None
 
+class TradeMarkerResponse(BaseModel):
+    trade_number: int
+    marker_type: str
+    side: str
+    bar_index: int
+    bar_time: datetime
+    execution_time: datetime
+    price: float
+    pnl: Optional[float] = None
+    is_win: Optional[bool] = None
+    exit_reason: Optional[str] = None
+    exit_reason_label: Optional[str] = None
+
 class BacktestResponse(BaseModel):
     """
     Respuesta completa de un backtest.
@@ -140,6 +153,7 @@ class BacktestResponse(BaseModel):
     # Detalle completo
     loaded_candles_count: int = Field(0, ge=0)
     trades: List[TradeResponse]
+    trade_markers: List[TradeMarkerResponse] = Field(default_factory=list)
     config: Optional[BacktestConfigResponse]
     alerts_feed: List[BacktestAlertResponse] = Field(default_factory=list)
     signals_timeline: List[BacktestSignalTimelineRowResponse] = Field(default_factory=list)

@@ -6,6 +6,7 @@ from backtesting.reporting_utils import exit_reason_label
 from API.schemas.backtest import (
     BacktestConfigResponse,
     BacktestResponse,
+    TradeMarkerResponse,
     TradeResponse,
 )
 
@@ -80,7 +81,11 @@ def config_to_response(config: BacktestConfig) -> BacktestConfigResponse:
         atr_stop_confirm_on_close=config.atr_stop_confirm_on_close,
     )
 
-def result_to_backtest_response(result: BacktestResult, backtest_id: str) -> BacktestResponse:
+def result_to_backtest_response(
+    result: BacktestResult,
+    backtest_id: str,
+    trade_markers: list[dict] | None = None,
+) -> BacktestResponse:
     alerts_feed_payload = [asdict(event) for event in result.alerts_feed]
     signals_timeline_payload = [asdict(row) for row in result.signals_timeline]
 
@@ -110,6 +115,7 @@ def result_to_backtest_response(result: BacktestResult, backtest_id: str) -> Bac
         avg_trade_return_pct=result.avg_trade_return_pct,
         loaded_candles_count=result.loaded_candles_count,
         trades=[trade_to_response(trade) for trade in result.trades],
+        trade_markers=[TradeMarkerResponse(**marker) for marker in (trade_markers or [])],
         config=config_to_response(result.config) if result.config else None,
         alerts_feed=alerts_feed_payload,
         signals_timeline=signals_timeline_payload,
@@ -170,6 +176,24 @@ def doc_to_backtest_response(doc: dict) -> BacktestResponse:
                 row["event"] = _map_timeline_event_code(ev)
         signals_timeline_payload.append(row)
 
+    raw_markers: list[dict] = doc.get("trade_markers", [])
+    trade_markers: list[TradeMarkerResponse] = [
+        TradeMarkerResponse(
+            trade_number=int(m["trade_number"]),
+            marker_type=str(m["marker_type"]),
+            side=str(m.get("side", "long")),
+            bar_index=int(m["bar_index"]),
+            bar_time=m["bar_time"],
+            execution_time=m["execution_time"],
+            price=float(m["price"]),
+            pnl=float(m["pnl"]) if m.get("pnl") is not None else None,
+            is_win=bool(m["is_win"]) if m.get("is_win") is not None else None,
+            exit_reason=m.get("exit_reason"),
+            exit_reason_label=m.get("exit_reason_label"),
+        )
+        for m in raw_markers
+    ]
+
     return BacktestResponse(
         id=str(doc["_id"]),
         symbol=doc["symbol"],
@@ -190,6 +214,7 @@ def doc_to_backtest_response(doc: dict) -> BacktestResponse:
         avg_trade_return_pct=float(doc["avg_trade_return_pct"]),
         loaded_candles_count=int(doc.get("loaded_candles_count", 0)),
         trades=trades,
+        trade_markers=trade_markers,
         config=config,
         alerts_feed=doc.get("alerts_feed", []),
         signals_timeline=signals_timeline_payload,
