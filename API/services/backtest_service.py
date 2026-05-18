@@ -132,16 +132,19 @@ async def execute_backtest(req: BacktestRequest) -> Optional[BacktestResponse]:
     return result_to_backtest_response(result, backtest_id)
 
 async def list_backtests(
-    symbol: str,
-    interval: str,
+    symbol: Optional[str] = None,
+    interval: Optional[str] = None,
     strategy_name: Optional[str] = None,
     limit: int = 20,
 ) -> list[BacktestResponse]:
-    """Lista backtests de MongoDB para un símbolo e intervalo específicos.
+    """Lista backtests de MongoDB.
+
+    Si `symbol` o `interval` no se proveen, la lista no los filtrará, permitiendo
+    consultar todos los backtests o filtrar por cualquiera de los campos.
 
     Args:
-        symbol: Símbolo requerido (ej: BTCUSDT).
-        interval: Intervalo requerido (ej: 4h).
+        symbol: Símbolo opcional (ej: BTCUSDT). Si es `None`, no se filtra por símbolo.
+        interval: Intervalo opcional (ej: 4h). Si es `None`, no se filtra por intervalo.
         strategy_name: Filtrar por nombre de estrategia (opcional).
         limit: Máximo de resultados (1-200).
 
@@ -149,13 +152,19 @@ async def list_backtests(
         Lista de BacktestResponse ordenados por fecha descendente.
     """
     db = get_db()
-    query: dict = {"symbol": symbol, "interval": interval}
+    query: dict = {}
+
+    if symbol:
+        query["symbol"] = symbol
+
+    if interval:
+        query["interval"] = interval
 
     if strategy_name:
         query["strategy_name"] = strategy_name
 
     docs: list[dict] = await db.backtests.find(query).sort("created_at", -1).limit(limit).to_list(length=None)
-    
+
     return [doc_to_backtest_response(doc) for doc in docs]
 
 async def get_backtest_by_id(backtest_id: str) -> BacktestResponse:

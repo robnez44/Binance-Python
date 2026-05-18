@@ -45,12 +45,12 @@ async def run_backtest(
     description="Devuelve todos los backtests guardados con sus trades completos.",
 )
 async def list_backtests_endpoint(
-    symbol:        str           = Query(..., description="Símbolo requerido, ej: BTCUSDT"),
-    interval:      str           = Query(..., description="Intervalo requerido, ej: 4h"),
+    symbol:        Optional[str] = Query(None, description="Símbolo (opcional), ej: BTCUSDT"),
+    interval:      Optional[str] = Query(None, description="Intervalo (opcional), ej: 4h"),
     strategy_name: Optional[str] = Query(None, description="Filtrar por nombre de estrategia (opcional)"),
     limit:         int           = Query(20, ge=1, le=200, description="Máximo de resultados"),
 ) -> List[BacktestResponse]:
-    """Obtiene lista de backtests para un símbolo e intervalo específicos."""
+    """Obtiene lista de backtests. `symbol` e `interval` son opcionales."""
     return await list_backtests(
         symbol=symbol,
         interval=interval,
