@@ -173,7 +173,12 @@ async def execute_backtest(req: BacktestRequest) -> Optional[BacktestResponse]:
     trade_markers = _build_trade_markers(result, candles)
 
     # Guardar en MongoDB
-    backtest_id: str = await save_backtest_result(result, trade_markers=trade_markers)
+    backtest_id: str = await save_backtest_result(
+        result,
+        trade_markers=trade_markers,
+        series_start_time=candles[0].open_time,
+        series_end_time=candles[-1].close_time,
+    )
 
     # Convertir a schema de respuesta
     return result_to_backtest_response(result, backtest_id, trade_markers=trade_markers)

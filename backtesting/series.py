@@ -1,5 +1,6 @@
 from __future__ import annotations
 from dataclasses import asdict, is_dataclass
+from datetime import datetime
 from typing import Any, Iterable, Mapping, Optional
 
 def _normalize_item(item: Any) -> Any:
@@ -14,6 +15,49 @@ def _normalize_mapping(items_by_key: Mapping[str, Iterable[Any]]) -> dict[str, l
         key: [_normalize_item(item) for item in items]
         for key, items in items_by_key.items()
     }
+
+
+def _item_timestamp(item: Any) -> datetime | None:
+    if isinstance(item, dict):
+        for key in ("timestamp", "open_time", "close_time"):
+            value = item.get(key)
+            if isinstance(value, datetime):
+                return value
+
+    return None
+
+
+def _last_timestamp(items: Iterable[Any]) -> datetime | None:
+    last_value: datetime | None = None
+    for item in items:
+        timestamp = _item_timestamp(item)
+        if timestamp is not None:
+          last_value = timestamp
+    return last_value
+
+
+def _filter_by_timestamp(items: Iterable[Any], cutoff: datetime | None, keys: tuple[str, ...]) -> list[Any]:
+    normalized = [_normalize_item(item) for item in items]
+    if cutoff is None:
+        return normalized
+
+    filtered: list[Any] = []
+    for item in normalized:
+        if not isinstance(item, dict):
+            filtered.append(item)
+            continue
+
+        value: datetime | None = None
+        for key in keys:
+            candidate = item.get(key)
+            if isinstance(candidate, datetime):
+                value = candidate
+                break
+
+        if value is None or value <= cutoff:
+            filtered.append(item)
+
+    return filtered
 
 def build_series_payload(
     candles: Iterable[Any],
@@ -32,6 +76,32 @@ def build_series_payload(
     if not candle_list:
         return None
 
+    candle_cutoff = _last_timestamp(candle_list)
+
+    ema_normalized = _normalize_mapping(ema_points)
+    ema_cutoffs = [
+        _last_timestamp(points)
+        for points in ema_normalized.values()
+        if points
+    ]
+    adx_normalized = [_normalize_item(item) for item in adx_points] if adx_points else []
+    adx_cutoff = _last_timestamp(adx_normalized) if adx_normalized else None
+
+    cutoff_candidates = [candle_cutoff, *ema_cutoffs, adx_cutoff]
+    cutoff = min((value for value in cutoff_candidates if value is not None), default=None)
+
+    candle_list = _filter_by_timestamp(candle_list, cutoff, ("open_time",))
+    if not candle_list:
+        return None
+
+    ema_normalized = {
+        key: _filter_by_timestamp(items, cutoff, ("timestamp",))
+        for key, items in ema_normalized.items()
+    }
+
+    if adx_normalized:
+        adx_normalized = _filter_by_timestamp(adx_normalized, cutoff, ("timestamp",))
+
     start_candle = candle_list[0]
     end_candle = candle_list[-1]
 
@@ -44,7 +114,7 @@ def build_series_payload(
         "end_price": end_candle.get("close_price"),
         "total_candles": len(candle_list),
         "candles": candle_list,
-        "ema_points": _normalize_mapping(ema_points),
+        "ema_points": ema_normalized,
         "smi_points": [_normalize_item(item) for item in smi_points],
         "sr_levels": [_normalize_item(item) for item in sr_levels],
     }
@@ -56,10 +126,8 @@ def build_series_payload(
     if not payload.get("sr_levels"):
         payload.pop("sr_levels", None)
 
-    if adx_points:
-        adx_norm = [_normalize_item(item) for item in adx_points]
-        if adx_norm:
-            payload["adx_points"] = adx_norm
+    if adx_normalized:
+        payload["adx_points"] = adx_normalized
 
     normalized_trends = [_normalize_item(item) for item in trends]
     if normalized_trends:

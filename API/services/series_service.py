@@ -11,6 +11,7 @@ from database.repository import (
     get_smi_snapshots_for_range,
     get_trends_for_range,
 )
+from API.utils.time_ranges import shift_back_one_interval
 
 async def get_series_for_backtest(backtest_id: str) -> SeriesDataResponse:
     """Obtiene y construye la serie (OHLC + indicadores) para un backtest dado.
@@ -36,16 +37,24 @@ async def get_series_for_backtest(backtest_id: str) -> SeriesDataResponse:
 
     symbol = doc.get("symbol")
     interval = doc.get("interval")
-    start_time = doc.get("start_time")
-    end_time = doc.get("end_time")
+    series_start_time = doc.get("series_start_time")
+    series_end_time = doc.get("series_end_time") or doc.get("end_time")
 
-    if not (symbol and interval and start_time):
-        raise ValueError("Faltan campos requeridos en backtest: symbol, interval, start_time")
+    if series_start_time is None and doc.get("start_time") and interval:
+        series_start_time = shift_back_one_interval(doc.get("start_time"), interval)
+
+    if not (symbol and interval and series_start_time):
+        raise ValueError("Faltan campos requeridos en backtest: symbol, interval, series_start_time")
 
     # Cargar candles para el rango exacto del backtest
-    candles = await get_candles(symbol=symbol, interval=interval, start_time=start_time, end_time=end_time)
+    candles = await get_candles(
+        symbol=symbol,
+        interval=interval,
+        start_time=series_start_time,
+        end_time=series_end_time,
+    )
     if not candles:
-        raise ValueError(f"No hay candles para {symbol} {interval} en rango {start_time} → {end_time}")
+        raise ValueError(f"No hay candles para {symbol} {interval} en rango {series_start_time} → {series_end_time}")
 
     series_start_time = candles[0].open_time
     series_end_time = candles[-1].close_time

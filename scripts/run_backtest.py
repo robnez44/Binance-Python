@@ -179,7 +179,12 @@ async def main() -> None:
         trade_markers = _build_trade_markers(result, candles)
 
         # Guardar una sola vez, ya con el nombre de PDF resuelto.
-        backtest_id = await save_backtest_result(result, trade_markers=trade_markers)
+        backtest_id = await save_backtest_result(
+            result,
+            trade_markers=trade_markers,
+            series_start_time=candles[0].open_time,
+            series_end_time=candles[-1].close_time,
+        )
         print(f"  Guardado en MongoDB  [_id: {backtest_id}]")
         if result.report_pdf_filename:
             print(f"  PDF en registro MongoDB: {result.report_pdf_filename}")
