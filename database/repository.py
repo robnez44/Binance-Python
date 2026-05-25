@@ -7,7 +7,7 @@ from database.database import get_db
 from database.schemas import (
     Candle, SegmentMetrics, EMASnapshot, ADXSnapshot, SMISnapshot, SRLevel, AnalysisRecord,
 )
-from utils.utils import backtest_result_to_dict
+from backtesting.serializers import backtest_result_to_dict
 
 def _strip_id(doc: Dict) -> Dict:
     return {k: v for k, v in doc.items() if k != "_id"}
