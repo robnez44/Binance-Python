@@ -117,6 +117,7 @@ def plot_backtest(
     signals: StrategySignals,
     result: BacktestResult,
     params: dict,
+    show: bool = False,
 ) -> None:
 
     has_adx = signals.adx_values is not None
@@ -358,10 +359,11 @@ def plot_backtest(
         result.report_pdf_filename = None
         print(f"  Aviso: no se pudo guardar PDF ({exc})")
 
-    try:
-        manager = plt.get_current_fig_manager()
-        manager.window.showMaximized()
-    except Exception:
-        pass
+    if show:
+        try:
+            manager = plt.get_current_fig_manager()
+            manager.window.showMaximized()
+        except Exception:
+            pass
 
-    plt.show()
+        plt.show()

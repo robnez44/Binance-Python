@@ -1,14 +1,17 @@
 from __future__ import annotations
 from typing import Optional
 from bson import ObjectId
+import logging
 import numpy as np
 import pandas as pd
+import asyncio
 
 from backtesting.alerts import build_alerts_feed, build_signals_timeline
 from backtesting.records import BacktestConfig, BacktestResult
 from backtesting.reporting_utils import exit_reason_label
 from backtesting.strategies import build_ema_long_signals
 from backtesting.simulator import run_long_backtest
+from API.utils.backtest_markers import build_trade_markers
 from database.repository import (
     get_candles,
     save_backtest_result,
@@ -18,54 +21,6 @@ from API.mappers.backtest import result_to_backtest_response, doc_to_backtest_re
 from database.database import get_db
 from indicators.emas import ema_pct_slope
 from utils.utils import parse_utc
-
-def _build_trade_markers(result: BacktestResult, candles: list) -> list[dict]:
-    """Construye marcadores de entrada/salida para consumo de frontend.
-
-    Usa `bar_time` basado en `open_time` de la vela para anclar el marker en chart.
-    """
-    candle_open_times = [c.open_time for c in candles]
-    markers: list[dict] = []
-
-    for trade_number, trade in enumerate(result.trades, 1):
-        if 0 <= trade.entry_index < len(candle_open_times):
-            markers.append(
-                {
-                    "trade_number": trade_number,
-                    "marker_type": "entry_exec",
-                    "side": trade.side,
-                    "bar_index": int(trade.entry_index),
-                    "bar_time": candle_open_times[trade.entry_index],
-                    "execution_time": trade.entry_time,
-                    "price": float(trade.entry_price),
-                }
-            )
-
-        if 0 <= trade.exit_index < len(candle_open_times):
-            markers.append(
-                {
-                    "trade_number": trade_number,
-                    "marker_type": "exit_exec",
-                    "side": trade.side,
-                    "bar_index": int(trade.exit_index),
-                    "bar_time": candle_open_times[trade.exit_index],
-                    "execution_time": trade.exit_time,
-                    "price": float(trade.exit_price),
-                    "pnl": float(trade.pnl),
-                    "is_win": bool(trade.pnl > 0),
-                    "exit_reason": trade.exit_reason,
-                    "exit_reason_label": exit_reason_label(trade.exit_reason, style="plain"),
-                }
-            )
-
-    markers.sort(
-        key=lambda marker: (
-            marker["bar_index"],
-            0 if marker["marker_type"] == "entry_exec" else 1,
-            marker["trade_number"],
-        )
-    )
-    return markers
 
 async def execute_backtest(req: BacktestRequest) -> Optional[BacktestResponse]:
     """
@@ -170,15 +125,54 @@ async def execute_backtest(req: BacktestRequest) -> Optional[BacktestResponse]:
         ema_gap_min_pct=req.ema_gap_min_pct,
     )
 
-    trade_markers = _build_trade_markers(result, candles)
+    logger = logging.getLogger(__name__)
 
-    # Guardar en MongoDB
+    # Construir marcadores usando helper centralizado
+    trade_markers = build_trade_markers(result, candles)
+
+    # Guardar en MongoDB primero (sin depender de que el PDF ya exista)
     backtest_id: str = await save_backtest_result(
         result,
         trade_markers=trade_markers,
         series_start_time=candles[0].open_time,
         series_end_time=candles[-1].close_time,
     )
+
+    # Lanzar generación de PDF en background (no bloquear la petición)
+    async def _background_generate_pdf(bid: str):
+        try:
+            def _sync_plot():
+                import matplotlib
+
+                matplotlib.use("Agg")
+                from backtesting.backtest_plot import plot_backtest as _plot
+
+                params = {
+                    "config": config,
+                    "adx_min": req.adx_min,
+                    "symbol": req.symbol,
+                    "interval": req.interval,
+                    "start_time": parse_utc(req.start_time),
+                    "end_time": parse_utc(req.end_time) if req.end_time else None,
+                }
+
+                # No mostrar ventanas en background
+                _plot(times, opens, highs, lows, closes, signals, result, params, show=False)
+
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(None, _sync_plot)
+
+            # Actualizar el documento con el nombre del PDF si se generó
+            from database.database import get_db
+            db = get_db()
+            if result.report_pdf_filename:
+                await db.backtests.update_one({"_id": ObjectId(bid)}, {"$set": {"report_pdf_filename": result.report_pdf_filename}})
+                logger.info("PDF generado para backtest %s -> %s", bid, result.report_pdf_filename)
+        except Exception as exc:
+            logger.exception("Error generando PDF en background para backtest %s", bid)
+
+    # Crear task en background y no esperar su finalización
+    asyncio.create_task(_background_generate_pdf(backtest_id))
 
     # Convertir a schema de respuesta
     return result_to_backtest_response(result, backtest_id, trade_markers=trade_markers)

@@ -8,56 +8,10 @@ from backtesting.alerts import build_alerts_feed, build_signals_timeline
 from backtesting.backtest_params import ask_backtest_params
 from backtesting.backtest_plot import plot_backtest
 from backtesting.backtest_reporting import build_trade_context, check_alerts, debug_signals, print_summary
-from backtesting.reporting_utils import exit_reason_label
+from API.utils.backtest_markers import build_trade_markers
 from database.database import connectDB, disconnect
 from database.repository import get_candles, save_backtest_result
 from indicators.emas import ema_pct_slope
-
-
-def _build_trade_markers(result, candles) -> list[dict]:
-    """Construye marcadores de entrada/salida alineados a `open_time` de vela."""
-    candle_open_times = [c.open_time for c in candles]
-    markers: list[dict] = []
-
-    for trade_number, trade in enumerate(result.trades, 1):
-        if 0 <= trade.entry_index < len(candle_open_times):
-            markers.append(
-                {
-                    "trade_number": trade_number,
-                    "marker_type": "entry_exec",
-                    "side": trade.side,
-                    "bar_index": int(trade.entry_index),
-                    "bar_time": candle_open_times[trade.entry_index],
-                    "execution_time": trade.entry_time,
-                    "price": float(trade.entry_price),
-                }
-            )
-
-        if 0 <= trade.exit_index < len(candle_open_times):
-            markers.append(
-                {
-                    "trade_number": trade_number,
-                    "marker_type": "exit_exec",
-                    "side": trade.side,
-                    "bar_index": int(trade.exit_index),
-                    "bar_time": candle_open_times[trade.exit_index],
-                    "execution_time": trade.exit_time,
-                    "price": float(trade.exit_price),
-                    "pnl": float(trade.pnl),
-                    "is_win": bool(trade.pnl > 0),
-                    "exit_reason": trade.exit_reason,
-                    "exit_reason_label": exit_reason_label(trade.exit_reason, style="plain"),
-                }
-            )
-
-    markers.sort(
-        key=lambda marker: (
-            marker["bar_index"],
-            0 if marker["marker_type"] == "entry_exec" else 1,
-            marker["trade_number"],
-        )
-    )
-    return markers
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  Main
@@ -174,9 +128,10 @@ async def main() -> None:
         print_summary(result, params, trade_contexts)
 
         result.loaded_candles_count = len(candles)
-        plot_backtest(times, opens, highs, lows, closes, signals, result, params)
+        # Mostrar ventana interactiva cuando se ejecuta desde CLI
+        plot_backtest(times, opens, highs, lows, closes, signals, result, params, show=True)
 
-        trade_markers = _build_trade_markers(result, candles)
+        trade_markers = build_trade_markers(result, candles)
 
         # Guardar una sola vez, ya con el nombre de PDF resuelto.
         backtest_id = await save_backtest_result(
