@@ -10,12 +10,13 @@ def _build_base_ema_signals(
     slow_span: int,
     min_slope_pct: float,
     exit_slope_periods: int,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     ema_fast = compute_ema(prices, fast_span)
     ema_slow = compute_ema(prices, slow_span)
     fast_slope_pct = ema_pct_slope(ema_fast)
 
     entry_base_long = np.zeros(len(prices), dtype=bool)
+    entry_long = np.zeros(len(prices), dtype=bool)
     exit_long = np.zeros(len(prices), dtype=bool)
 
     for i in range(1, len(prices)):
@@ -23,6 +24,8 @@ def _build_base_ema_signals(
         strong_up = fast_slope_pct[i] >= min_slope_pct
         above_ema = prices[i] > ema_fast[i]
         entry_base_long[i] = cross_up and strong_up and above_ema
+        bullish_trend = ema_fast[i] > ema_slow[i]
+        entry_long[i] = entry_base_long[i] or (bullish_trend and strong_up and above_ema)
 
         if i >= exit_slope_periods:
             sustained_down = all(
@@ -32,7 +35,7 @@ def _build_base_ema_signals(
             below_ema = prices[i] < ema_fast[i]
             exit_long[i] = sustained_down and below_ema
 
-    return ema_fast, ema_slow, fast_slope_pct, entry_base_long, exit_long
+    return ema_fast, ema_slow, fast_slope_pct, entry_base_long, entry_long, exit_long
 
 def _build_ema_gap_mask(
     ema_fast: np.ndarray,
@@ -82,7 +85,7 @@ def build_ema_long_signals(
 
     No crea funciones por combinación de indicadores; activa solo los filtros necesarios.
     """
-    ema_fast, ema_slow, _, entry_base_long, exit_long = _build_base_ema_signals(
+    ema_fast, ema_slow, _, entry_base_long, entry_long, exit_long = _build_base_ema_signals(
         prices=prices,
         fast_span=fast_span,
         slow_span=slow_span,
@@ -91,7 +94,6 @@ def build_ema_long_signals(
     )
 
     n = len(prices)
-    entry_long = entry_base_long.copy()
     filter_total_count = np.zeros(n, dtype=int)
     filter_pass_count = np.zeros(n, dtype=int)
     active_filters: list[str] = []
