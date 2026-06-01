@@ -59,12 +59,9 @@ def ask_backtest_params() -> dict:
     ema_gap_min_pct = float(ema_gap_min_str) if ema_gap_min_str else 0.0
     if adx_min > 0:
         adx_di_str = input("Filtro +DI > -DI en entrada (S/n): ").strip().lower()
-        adx_rise_str = input("Filtro ADX no decreciente en entrada (s/N): ").strip().lower()
         adx_require_di = adx_di_str != "n"
-        adx_require_rising = adx_rise_str == "s"
     else:
         adx_require_di = False
-        adx_require_rising = False
 
     leverage = input("Apalancamiento (default 1X): ").strip()
     capital = input("Capital inicial (default 10000): ").strip()
@@ -93,7 +90,6 @@ def ask_backtest_params() -> dict:
             ema_gap_min_pct=ema_gap_min_pct,
             adx_min=adx_min,
             adx_require_di=adx_require_di,
-            adx_require_rising=adx_require_rising,
             atr_period=atr_period,
             atr_stop_mult=atr_stop_mult,
             atr_trailing_mult=atr_trailing_mult,
@@ -104,7 +100,6 @@ def ask_backtest_params() -> dict:
         "ema_gap_min_pct": ema_gap_min_pct,
         "adx_min": adx_min,
         "adx_require_di": adx_require_di,
-        "adx_require_rising": adx_require_rising,
         "use_adx": adx_min > 0.0,
         "use_atr_stop": True,
         "atr_stop_confirm_on_close": atr_stop_confirm_on_close,

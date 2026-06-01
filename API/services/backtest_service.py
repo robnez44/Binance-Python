@@ -67,7 +67,6 @@ async def execute_backtest(req: BacktestRequest) -> Optional[BacktestResponse]:
         ema_gap_min_pct=req.ema_gap_min_pct,
         adx_min=req.adx_min,
         adx_require_di=req.adx_require_di,
-        adx_require_rising=req.adx_require_rising,
         atr_period=req.atr_period,
         atr_stop_mult=req.atr_stop_mult,
         atr_trailing_mult=req.atr_trailing_mult,
@@ -87,7 +86,6 @@ async def execute_backtest(req: BacktestRequest) -> Optional[BacktestResponse]:
         adx_min=req.adx_min,
         adx_period=14,  # mismo periodo que ATR por consistencia
         require_di_confirmation=req.adx_require_di,
-        require_adx_rising=req.adx_require_rising,
     )
 
     # Ejecutar simulador

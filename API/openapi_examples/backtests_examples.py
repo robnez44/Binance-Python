@@ -18,7 +18,6 @@ OPENAPI_EXAMPLES = {
             "ema_gap_min_pct": 0.0,
             "adx_min": 23,
             "adx_require_di": True,
-            "adx_require_rising": False,
         },
     },
     "largo": {
@@ -39,7 +38,6 @@ OPENAPI_EXAMPLES = {
             "ema_gap_min_pct": 0.0,
             "adx_min": 23,
             "adx_require_di": True,
-            "adx_require_rising": False,
             "atr_period": 14,
             "atr_stop_mult": 1.8,
             "atr_trailing_mult": 2.2,

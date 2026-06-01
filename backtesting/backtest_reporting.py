@@ -18,7 +18,6 @@ def debug_signals(
     ema_gap_min_pct: float,
     adx_min: float,
     adx_require_di: bool,
-    adx_require_rising: bool,
 ) -> None:
     has_adx = signals.adx_values is not None
     W = 160 if has_adx else 130
@@ -31,7 +30,7 @@ def debug_signals(
     entry_exec = {t.entry_index: t for t in result.trades}
     exit_exec = {t.exit_index: t for t in result.trades}
 
-    relevant = set()
+    relevant: set[int] = set()
     for i, (e, x) in enumerate(zip(signals.entry_long, signals.exit_long)):
         if e or x:
             relevant.update([max(0, i - 1), i, min(len(closes) - 1, i + 1)])
@@ -43,7 +42,7 @@ def debug_signals(
         print("═" * W)
         return
 
-    adx_header = f"{'ADX':>7}  {'A≥mn':>5}  {'DI+':>4}  {'ADX↑':>4}  " if has_adx else ""
+    adx_header = f"{'ADX':>7}  {'A≥mn':>5}  {'DI+':>4}  " if has_adx else ""
     print(
         f"  {'idx':>5}  {'Fecha':>16}  {'Close':>10}  "
         f"{'EMA10':>10}  {'EMA55':>10}  {'Gap%':>8}  {'Slope%':>8}  "
@@ -69,8 +68,9 @@ def debug_signals(
         gap_ok = ema_gap >= ema_gap_min_pct
         slope_ok = slope >= min_slope_pct
         above_ok = price > ema10
+
         cross_s = "✔" if cross_ok else "✘"
-        gap_s = "✔" if gap_ok else "✘"
+        gap_s   = "✔" if gap_ok   else "✘"
         slope_s = "✔" if slope_ok else "✘"
         above_s = "✔" if above_ok else "✘"
 
@@ -78,35 +78,36 @@ def debug_signals(
         if has_adx:
             adx_v = signals.adx_values[i]
             adx_ok = adx_v >= adx_min if adx_min > 0 else True
-            di_ok = signals.plus_di[i] > signals.minus_di[i]
-            adx_up_ok = (adx_v >= signals.adx_values[i - 1]) if i > 0 else False
+            di_ok  = signals.plus_di[i] > signals.minus_di[i]
             adx_col = (
                 f"{adx_v:>7.2f}  "
                 f"{'✔' if adx_ok else '✘':>5}  "
-                f"{'✔' if di_ok else '✘':>4}  "
-                f"{'✔' if adx_up_ok else '✘':>4}  "
+                f"{'✔' if di_ok  else '✘':>4}  "
             )
 
-        eventos = []
-        next_open_str = f"open[{i+1}]={opens[i+1]:,.2f}" if (i + 1) < len(opens) else "open[next]=N/A"
+        eventos: list[str] = []
+        next_open_str = (
+            f"open[{i+1}]={opens[i+1]:,.2f}" if (i + 1) < len(opens) else "open[next]=N/A"
+        )
+
         if signals.entry_long[i]:
             conds = f"{cross_s}{gap_s}{slope_s}{above_s}"
             if has_adx:
-                adx_v2 = signals.adx_values[i]
+                adx_v2  = signals.adx_values[i]
                 adx_ok2 = adx_v2 >= adx_min if adx_min > 0 else True
-                di_ok2 = signals.plus_di[i] > signals.minus_di[i]
-                adx_up_ok2 = (adx_v2 >= signals.adx_values[i - 1]) if i > 0 else False
-                conds += "✔" if adx_ok2 else "✘"
+                di_ok2  = signals.plus_di[i] > signals.minus_di[i]
+                conds  += "✔" if adx_ok2 else "✘"
                 if adx_require_di:
                     conds += "✔" if di_ok2 else "✘"
-                if adx_require_rising:
-                    conds += "✔" if adx_up_ok2 else "✘"
             eventos.append(f"SEÑAL ENTRADA [{conds}]  → {next_open_str}")
+
         if signals.exit_long[i]:
             eventos.append(f"SEÑAL SALIDA  → {next_open_str}")
+
         if i in entry_exec:
             t2 = entry_exec[i]
             eventos.append(f"EXEC ENTRADA  open={t2.entry_price:,.2f}")
+
         if i in exit_exec:
             t2 = exit_exec[i]
             eventos.append(
@@ -143,6 +144,7 @@ def debug_signals(
     print("═" * W)
     print()
 
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  Contexto de indicadores por trade (para el print detallado)
 # ══════════════════════════════════════════════════════════════════════════════
@@ -153,8 +155,8 @@ def build_trade_context(
     slope_pct: np.ndarray,
     min_slope_pct: float,
     exit_slope_periods: int,
-) -> list:
-    contexts = []
+) -> list[dict]:
+    contexts: list[dict] = []
     has_adx = signals.adx_values is not None
 
     for trade in result.trades:
@@ -203,10 +205,7 @@ def check_alerts(
     feed: list[BacktestAlertEvent],
     params: dict,
 ) -> None:
-    """Renderiza `alerts_feed` en consola.
-
-    Importante: esta función NO construye artefactos ni muta `BacktestResult`.
-    """
+    """Renderiza alerts_feed en consola."""
     W = 72
 
     print()
@@ -221,9 +220,8 @@ def check_alerts(
         return
 
     for ev in feed:
-        t = ev.timestamp.strftime("%Y-%m-%d %H:%M UTC")
-        trade_no = ev.trade_number
-        trade_txt = f"  [trade #{trade_no}]" if trade_no else ""
+        t         = ev.timestamp.strftime("%Y-%m-%d %H:%M UTC")
+        trade_txt = f"  [trade #{ev.trade_number}]" if ev.trade_number else ""
         print(
             f"  {t}  idx={ev.index:>5}  "
             f"{ev.event_type:>12}  "
@@ -239,7 +237,7 @@ def check_alerts(
 def print_summary(
     result: BacktestResult,
     params: dict,
-    trade_contexts: list,
+    trade_contexts: list[dict],
 ) -> None:
     W = 80
     SEP = "─" * W
@@ -265,12 +263,13 @@ def print_summary(
     print(f"  {'Velas para salida':<28} {params['exit_slope_periods']}")
     print(f"  {'Pendiente mínima':<28} {params['min_slope_pct']:.4f}%")
     print(f"  {'Gap EMA mínimo':<28} {params['ema_gap_min_pct']:.4f}%")
+
     if params["use_adx"]:
         print(f"  {'ADX mínimo':<28} {params['adx_min']:.1f}")
         print(f"  {'Filtro +DI > -DI':<28} {'activo' if params['adx_require_di'] else 'desactivado'}")
-        print(f"  {'Filtro ADX creciente':<28} {'activo' if params['adx_require_rising'] else 'desactivado'}")
     else:
         print(f"  {'ADX mínimo':<28} desactivado")
+        
     atr_stop_label = f"ATR x{config.atr_stop_mult:g} (n={config.atr_period})" if config.atr_stop_mult else "desactivado"
     atr_trail_label = f"ATR x{config.atr_trailing_mult:g} (n={config.atr_period})" if config.atr_trailing_mult else "desactivado"
     atr_confirm_label = "cierre de vela" if config.atr_stop_confirm_on_close else "toque intravela"
@@ -358,14 +357,8 @@ def print_summary(
         print(f"    {cross_sym}  EMA 10 {cross_rel} EMA 55")
         print(f"         EMA 10 = {ema10_e:>12,.2f}")
         print(f"         EMA 55 = {ema55_e:>12,.2f}")
-        print(
-            f"    {gap_sym}  Gap EMA10-EMA55 = {gap_e:+.4f}%"
-            f"   (mín requerido: +{params['ema_gap_min_pct']:.4f}%)"
-        )
-        print(
-            f"    {slope_sym}  Pendiente EMA 10 = {slope_e_s}{slope_e:.4f}%"
-            f"   (mín requerido: +{params['min_slope_pct']:.4f}%)"
-        )
+        print(f"    {gap_sym}  Gap EMA10-EMA55 = {gap_e:+.4f}%   (mín requerido: +{params['ema_gap_min_pct']:.4f}%)")
+        print(f"    {slope_sym}  Pendiente EMA 10 = {slope_e_s}{slope_e:.4f}%   (mín requerido: +{params['min_slope_pct']:.4f}%)")
         print(f"    {above_sym}  Precio {above_rel} EMA 10")
         print(f"         Precio = {price_e:>12,.2f}")
         print(f"         EMA 10 = {ema10_e:>12,.2f}")
@@ -387,12 +380,9 @@ def print_summary(
                 di_sym = "✔" if di_ok else "✘"
                 print(f"    {di_sym}  +DI > -DI")
             print(f"         +DI = {pdi_e:.2f}   -DI = {mdi_e:.2f}")
+
             if ctx["adx_prev_entry"] is not None:
                 adx_prev_e = ctx["adx_prev_entry"]
-                adx_up_ok = adx_e >= adx_prev_e
-                if params["adx_require_rising"]:
-                    adx_up_sym = "✔" if adx_up_ok else "✘"
-                    print(f"    {adx_up_sym}  ADX actual >= ADX previo")
                 print(f"         ADX prev = {adx_prev_e:.2f}   ADX actual = {adx_e:.2f}")
 
         # ── Condiciones de SALIDA ─────────────────────────────────────────

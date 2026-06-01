@@ -79,7 +79,6 @@ def config_to_dict(config: BacktestConfig) -> Optional[Dict[str, Any]]:
         "ema_gap_min_pct": config.ema_gap_min_pct,
         "adx_min": config.adx_min,
         "adx_require_di": config.adx_require_di,
-        "adx_require_rising": config.adx_require_rising,
         "atr_period": config.atr_period,
         "atr_stop_mult": config.atr_stop_mult,
         "atr_trailing_mult": config.atr_trailing_mult,

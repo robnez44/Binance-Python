@@ -76,7 +76,6 @@ def build_ema_long_signals(
     adx_min: float = 0.0,
     adx_period: int = 14,
     require_di_confirmation: bool = True,
-    require_adx_rising: bool = False,
 ) -> StrategySignals:
     """
     Constructor modular de señales:
@@ -124,11 +123,6 @@ def build_ema_long_signals(
         adx_mask = adx_vals >= adx_min
         if require_di_confirmation:
             adx_mask &= plus_di > minus_di
-        if require_adx_rising:
-            rising_mask = np.ones(n, dtype=bool)
-            rising_mask[0] = False
-            rising_mask[1:] = adx_vals[1:] >= adx_vals[:-1]
-            adx_mask &= rising_mask
 
         entry_long &= adx_mask
         filter_total_count += 1
@@ -136,8 +130,6 @@ def build_ema_long_signals(
         active_filters.append(f"adx>={adx_min:.2f}")
         if require_di_confirmation:
             active_filters.append("+DI>-DI")
-        if require_adx_rising:
-            active_filters.append("adx_rising")
 
     if active_filters:
         strategy_name = f"ema_modular_{fast_span}_{slow_span}_long"
@@ -191,7 +183,6 @@ def ema_adx_long_strategy(
     adx_min: float = 23.0,
     adx_period: int = 14,
     require_di_confirmation: bool = True,
-    require_adx_rising: bool = False,
 ) -> StrategySignals:
     return build_ema_long_signals(
         prices=prices,
@@ -205,5 +196,4 @@ def ema_adx_long_strategy(
         adx_min=adx_min,
         adx_period=adx_period,
         require_di_confirmation=require_di_confirmation,
-        require_adx_rising=require_adx_rising,
     )

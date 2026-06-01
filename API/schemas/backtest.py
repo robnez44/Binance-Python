@@ -33,7 +33,6 @@ class BacktestRequest(BaseModel):
     # Filtro ADX
     adx_min:           float = Field(0.0,  ge=0.0, description="ADX mínimo para confirmar tendencia (0 = desactivado)")
     adx_require_di:    bool  = Field(True,          description="Exigir +DI > -DI en la entrada")
-    adx_require_rising: bool = Field(False,          description="Exigir que el ADX sea no decreciente en la entrada")
 
     # ATR stops dinamicos
     atr_period:        int            = Field(14,  ge=1, description="Periodo del ATR")
@@ -71,7 +70,6 @@ class BacktestConfigResponse(BaseModel):
     ema_gap_min_pct:         float
     adx_min:                 float
     adx_require_di:          bool
-    adx_require_rising:      bool
     atr_period:              int
     atr_stop_mult:           Optional[float]
     atr_trailing_mult:       Optional[float]

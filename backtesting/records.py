@@ -19,7 +19,6 @@ class BacktestConfig:
     ema_gap_min_pct:        float = 0.0             # Separación mínima EMA10-EMA55 en % para validar cruces (0.0 = desactivado)
     adx_min:                float          = 0.0
     adx_require_di:         bool = True             # Si True, exige +DI > -DI para validar entrada con ADX
-    adx_require_rising:     bool = False            # Si True, exige ADX no decreciente (más estricto)
     atr_period:             int = 14                # Periodo ATR para stops dinámicos
     atr_stop_mult:          Optional[float] = None  # Stop inicial dinámico: entrada - ATR * multiplicador
     atr_trailing_mult:      Optional[float] = None  # Trailing stop dinámico: max_close - ATR * multiplicador

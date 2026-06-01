@@ -58,7 +58,6 @@ async def main() -> None:
             adx_min=params["adx_min"],
             adx_period=14,
             require_di_confirmation=params["adx_require_di"],
-            require_adx_rising=params["adx_require_rising"],
         )
 
         base_entries = int(signals.entry_base_long.sum()) if signals.entry_base_long is not None else int(signals.entry_long.sum())
@@ -122,7 +121,6 @@ async def main() -> None:
             ema_gap_min_pct=params["ema_gap_min_pct"],
             adx_min=params["adx_min"],
             adx_require_di=params["adx_require_di"],
-            adx_require_rising=params["adx_require_rising"],
         )
 
         print_summary(result, params, trade_contexts)
