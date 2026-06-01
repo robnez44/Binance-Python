@@ -59,6 +59,12 @@ async def ensure_indexes() -> None:
         name="uq_analysis",
     )
 
+    # Índice para estrategias guardadas de backtest
+    await db.strategies.create_index(
+        [("name", 1), ("symbol", 1), ("interval", 1)],
+        name="idx_strategies",
+    )
+
     print("Índices verificados / creados.")
 
 #  Candles
@@ -374,6 +380,49 @@ async def save_backtest_result(
         doc["series_end_time"] = series_end_time
     insert_result = await db.backtests.insert_one(doc)
     return str(insert_result.inserted_id)
+
+async def save_strategy(
+    config: Dict,
+    name: str | None = None,
+    symbol: str | None = None,
+    interval: str | None = None,
+    description: str | None = None,
+) -> str:
+    db = get_db()
+    doc = {
+        "config": config,
+        "name": name,
+        "symbol": symbol,
+        "interval": interval,
+        "description": description,
+        "created_at": datetime.now(timezone.utc),
+    }
+    res = await db.strategies.insert_one(doc)
+    return str(res.inserted_id)
+
+async def get_strategies(symbol: Optional[str] = None, interval: Optional[str] = None, limit: int = 50) -> List[Dict]:
+    db = get_db()
+    query = {}
+    if symbol:
+        query["symbol"] = symbol
+    if interval:
+        query["interval"] = interval
+    docs = await db.strategies.find(query).sort("created_at", -1).limit(limit).to_list(length=None)
+    return docs
+
+async def get_strategy_by_id(config_id: str) -> Optional[Dict]:
+    db = get_db()
+    from bson import ObjectId
+
+    doc = await db.strategies.find_one({"_id": ObjectId(config_id)})
+    return doc
+
+async def delete_strategy(config_id: str) -> bool:
+    db = get_db()
+    from bson import ObjectId
+
+    res = await db.strategies.delete_one({"_id": ObjectId(config_id)})
+    return res.deleted_count == 1
 
 async def get_backtests(
     symbol: Optional[str] = None,

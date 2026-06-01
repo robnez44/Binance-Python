@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from database.database import connectDB, disconnect
 from API.routers import backtests
 from API.routers import series
+from API.routers import strategies
 
 # Lifespan
 @asynccontextmanager
@@ -16,12 +17,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 app = FastAPI(
     title="Crypto Analysis API",
-    description="API para backtesting de estrategias de criptomonedas",
+    description="API para backtesting de estrategias de activos",
     version="1.0.0",
     lifespan=lifespan,
 )
 
-# CORS necesario para que el frontend pueda consumir la API
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],    # cambiar por la URL del frontend en produccion
@@ -32,6 +33,7 @@ app.add_middleware(
 # Routers
 app.include_router(backtests.router, prefix="/api/backtests", tags=["Backtests"])
 app.include_router(series.router, prefix="/api/backtests", tags=["Series"])
+app.include_router(strategies.router, prefix="/api/strategies", tags=["Strategies"])
 
 @app.get("/", tags=["Health"])
 def health() -> dict[str, str]:
